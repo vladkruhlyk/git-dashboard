@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Key, Loader2, ExternalLink, LogOut, ChevronDown } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Key, Loader2, ExternalLink, LogOut, ChevronDown, ChevronRight, Folder } from 'lucide-react';
 import type { AdAccount, DateRange } from '../types';
 
 interface ApiSetupProps {
@@ -22,6 +22,7 @@ export function ApiSetup({
 }: ApiSetupProps) {
   const [inputToken, setInputToken] = useState(token);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [openedGroups, setOpenedGroups] = useState<Record<string, boolean>>({});
   const [dateRange, setDateRange] = useState<DateRange>(() => {
     const today = new Date();
     const weekAgo = new Date(today);
@@ -64,6 +65,17 @@ export function ApiSetup({
       onSelectAccount(selectedAccount, newRange);
     }
   };
+
+  const groupedAccounts = useMemo(() => {
+    const groups: Record<string, AdAccount[]> = {};
+    for (const account of accounts) {
+      const parts = account.name.split('|');
+      const groupName = parts.length > 1 ? parts[0].trim() : 'Без папки';
+      if (!groups[groupName]) groups[groupName] = [];
+      groups[groupName].push(account);
+    }
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b, 'ru'));
+  }, [accounts]);
 
   if (!token || accounts.length === 0) {
     return (
@@ -160,18 +172,34 @@ export function ApiSetup({
             </button>
             {showDropdown && (
               <div className="absolute top-full left-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-xl border border-white/10 bg-[#0d1117] shadow-2xl shadow-black/50 z-50">
-                {accounts.map((acc) => (
-                  <button
-                    key={acc.id}
-                    onClick={() => handleSelectAccount(acc)}
-                    className={`w-full text-left px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 ${
-                      selectedAccount?.id === acc.id ? 'bg-indigo-500/10 text-indigo-400' : 'text-gray-300'
-                    }`}
-                  >
-                    <div className="font-medium text-sm">{acc.name}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">ID: {acc.account_id} · {acc.currency}</div>
-                  </button>
-                ))}
+                {groupedAccounts.map(([groupName, groupAccounts]) => {
+                  const isOpen = openedGroups[groupName] ?? true;
+                  return (
+                    <div key={groupName} className="border-b border-white/5 last:border-b-0">
+                      <button
+                        onClick={() => setOpenedGroups(prev => ({ ...prev, [groupName]: !isOpen }))}
+                        className="w-full px-3 py-2 text-left text-xs text-gray-400 uppercase tracking-wider flex items-center gap-2 hover:bg-white/[0.03]"
+                      >
+                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        <Folder className="w-4 h-4" />
+                        <span className="truncate">{groupName}</span>
+                        <span className="ml-auto text-[10px] text-gray-500">{groupAccounts.length}</span>
+                      </button>
+                      {isOpen && groupAccounts.map((acc) => (
+                        <button
+                          key={acc.id}
+                          onClick={() => handleSelectAccount(acc)}
+                          className={`w-full text-left pl-9 pr-4 py-3 hover:bg-white/5 transition-colors border-t border-white/5 ${
+                            selectedAccount?.id === acc.id ? 'bg-indigo-500/10 text-indigo-400' : 'text-gray-300'
+                          }`}
+                        >
+                          <div className="font-medium text-sm">{acc.name}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">ID: {acc.account_id} · {acc.currency}</div>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

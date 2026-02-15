@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DollarSign, Eye, Users, MousePointerClick,
   ShoppingCart, TrendingUp, Target, Layers,
-  BarChart3, Zap, Filter, X, ChevronDown, FileDown, Loader2,
+  BarChart3, Zap, Filter, X, ChevronDown, FileDown, Loader2, SlidersHorizontal,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -13,6 +13,19 @@ import { MetricCard } from './MetricCard';
 import type { AccountInsights, CampaignInsight, DailyData, AdAccount } from '../types';
 
 type ChartMetricKey = 'purchases' | 'leads' | 'clicks' | 'impressions';
+type MetricKey =
+  | 'spend'
+  | 'impressions'
+  | 'reach'
+  | 'clicks'
+  | 'ctr'
+  | 'cpc'
+  | 'cpm'
+  | 'purchases'
+  | 'purchaseValue'
+  | 'roas'
+  | 'costPerPurchase'
+  | 'leads';
 
 interface DashboardProps {
   account: AdAccount;
@@ -52,6 +65,21 @@ const chartOptions: Array<{ value: ChartMetricKey; label: string; chartLabel: st
   { value: 'clicks', label: 'Клики по дням', chartLabel: 'Клики', color: '#06b6d4' },
   { value: 'impressions', label: 'Показы по дням', chartLabel: 'Показы', color: '#f59e0b' },
 ];
+const METRICS_STORAGE_KEY = 'dashboard_visible_metrics';
+const defaultMetricKeys: MetricKey[] = [
+  'spend',
+  'impressions',
+  'reach',
+  'clicks',
+  'ctr',
+  'cpc',
+  'cpm',
+  'purchases',
+  'purchaseValue',
+  'roas',
+  'costPerPurchase',
+  'leads',
+];
 
 export function Dashboard({
   account, insights, campaigns, dailyData,
@@ -59,7 +87,19 @@ export function Dashboard({
 }: DashboardProps) {
   const [chartMetric, setChartMetric] = useState<ChartMetricKey>('purchases');
   const [showChartDropdown, setShowChartDropdown] = useState(false);
+  const [showMetricsDropdown, setShowMetricsDropdown] = useState(false);
   const [isExportingImage, setIsExportingImage] = useState(false);
+  const [visibleMetricKeys, setVisibleMetricKeys] = useState<MetricKey[]>(() => {
+    try {
+      const raw = localStorage.getItem(METRICS_STORAGE_KEY);
+      if (!raw) return defaultMetricKeys;
+      const parsed = JSON.parse(raw) as MetricKey[];
+      const normalized = defaultMetricKeys.filter(k => parsed.includes(k));
+      return normalized.length > 0 ? normalized : defaultMetricKeys;
+    } catch {
+      return defaultMetricKeys;
+    }
+  });
   const [exportError, setExportError] = useState<string | null>(null);
   const dashboardRef = useRef<HTMLDivElement>(null);
 
@@ -69,8 +109,13 @@ export function Dashboard({
     ? campaigns.find(c => c.campaign_id === selectedCampaignId)?.campaign_name
     : null;
 
+  useEffect(() => {
+    localStorage.setItem(METRICS_STORAGE_KEY, JSON.stringify(visibleMetricKeys));
+  }, [visibleMetricKeys]);
+
   const metrics = [
     {
+      key: 'spend' as MetricKey,
       title: 'Расход',
       value: formatMoney(insights.spend),
       icon: <DollarSign className="w-5 h-5 text-emerald-400" />,
@@ -78,6 +123,7 @@ export function Dashboard({
       glowColor: '#10b981',
     },
     {
+      key: 'impressions' as MetricKey,
       title: 'Показы',
       value: formatNum(insights.impressions),
       icon: <Eye className="w-5 h-5 text-blue-400" />,
@@ -85,6 +131,7 @@ export function Dashboard({
       glowColor: '#3b82f6',
     },
     {
+      key: 'reach' as MetricKey,
       title: 'Охват',
       value: formatNum(insights.reach),
       icon: <Users className="w-5 h-5 text-cyan-400" />,
@@ -92,6 +139,7 @@ export function Dashboard({
       glowColor: '#06b6d4',
     },
     {
+      key: 'clicks' as MetricKey,
       title: 'Клики',
       value: formatNum(insights.clicks),
       icon: <MousePointerClick className="w-5 h-5 text-amber-400" />,
@@ -99,6 +147,7 @@ export function Dashboard({
       glowColor: '#f59e0b',
     },
     {
+      key: 'ctr' as MetricKey,
       title: 'CTR',
       value: insights.ctr.toFixed(2) + '%',
       icon: <Target className="w-5 h-5 text-orange-400" />,
@@ -106,6 +155,7 @@ export function Dashboard({
       glowColor: '#f97316',
     },
     {
+      key: 'cpc' as MetricKey,
       title: 'CPC',
       value: formatMoney(insights.cpc),
       icon: <Zap className="w-5 h-5 text-yellow-400" />,
@@ -113,6 +163,7 @@ export function Dashboard({
       glowColor: '#eab308',
     },
     {
+      key: 'cpm' as MetricKey,
       title: 'CPM',
       value: formatMoney(insights.cpm),
       icon: <Layers className="w-5 h-5 text-pink-400" />,
@@ -120,6 +171,7 @@ export function Dashboard({
       glowColor: '#ec4899',
     },
     {
+      key: 'purchases' as MetricKey,
       title: 'Покупки',
       value: formatNum(insights.purchases),
       icon: <ShoppingCart className="w-5 h-5 text-violet-400" />,
@@ -127,6 +179,7 @@ export function Dashboard({
       glowColor: '#8b5cf6',
     },
     {
+      key: 'purchaseValue' as MetricKey,
       title: 'Ценность покупок',
       value: formatMoney(insights.purchaseValue),
       icon: <BarChart3 className="w-5 h-5 text-fuchsia-400" />,
@@ -134,6 +187,7 @@ export function Dashboard({
       glowColor: '#d946ef',
     },
     {
+      key: 'roas' as MetricKey,
       title: 'ROAS',
       value: insights.roas.toFixed(2) + 'x',
       icon: <TrendingUp className="w-5 h-5 text-emerald-400" />,
@@ -142,6 +196,7 @@ export function Dashboard({
       subtitle: insights.roas >= 2 ? '✅ Отлично' : insights.roas >= 1 ? '⚠️ Средний' : '❌ Низкий',
     },
     {
+      key: 'costPerPurchase' as MetricKey,
       title: 'Цена за покупку',
       value: formatMoney(insights.costPerPurchase),
       icon: <DollarSign className="w-5 h-5 text-red-400" />,
@@ -149,6 +204,7 @@ export function Dashboard({
       glowColor: '#ef4444',
     },
     {
+      key: 'leads' as MetricKey,
       title: 'Лиды',
       value: formatNum(insights.leads),
       icon: <Users className="w-5 h-5 text-indigo-400" />,
@@ -156,6 +212,17 @@ export function Dashboard({
       glowColor: '#6366f1',
     },
   ];
+  const visibleMetrics = metrics.filter(m => visibleMetricKeys.includes(m.key));
+
+  const toggleMetric = (metricKey: MetricKey) => {
+    const isVisible = visibleMetricKeys.includes(metricKey);
+    if (isVisible && visibleMetricKeys.length === 1) return;
+    setVisibleMetricKeys(prev =>
+      prev.includes(metricKey)
+        ? prev.filter(k => k !== metricKey)
+        : [...prev, metricKey]
+    );
+  };
 
   const tooltipStyle = {
     backgroundColor: '#0d1117',
@@ -233,6 +300,51 @@ export function Dashboard({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative" data-export-ignore="true">
+            <button
+              onClick={() => setShowMetricsDropdown(v => !v)}
+              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:border-white/20 transition-all"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              Метрики
+            </button>
+            {showMetricsDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowMetricsDropdown(false)} />
+                <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-white/10 bg-[#0d1117] p-2 shadow-2xl shadow-black/60">
+                  <div className="mb-2 flex items-center gap-2">
+                    <button
+                      onClick={() => setVisibleMetricKeys(defaultMetricKeys)}
+                      className="rounded-lg border border-white/10 px-2 py-1 text-xs text-gray-300 hover:bg-white/5"
+                    >
+                      Все
+                    </button>
+                    <button
+                      onClick={() => setVisibleMetricKeys(defaultMetricKeys.slice(0, 6))}
+                      className="rounded-lg border border-white/10 px-2 py-1 text-xs text-gray-300 hover:bg-white/5"
+                    >
+                      База
+                    </button>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto space-y-1">
+                    {metrics.map((metric) => {
+                      const checked = visibleMetricKeys.includes(metric.key);
+                      return (
+                        <button
+                          key={metric.key}
+                          onClick={() => toggleMetric(metric.key)}
+                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-gray-300 hover:bg-white/5"
+                        >
+                          <span className={`h-4 w-4 rounded border ${checked ? 'border-indigo-500 bg-indigo-500/30' : 'border-white/20'}`} />
+                          <span>{metric.title}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={handleExportImage}
             disabled={isExportingImage}
@@ -277,7 +389,7 @@ export function Dashboard({
 
       {/* Metrics grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-        {metrics.map((m) => (
+        {visibleMetrics.map((m) => (
           <MetricCard key={m.title} {...m} />
         ))}
       </div>
