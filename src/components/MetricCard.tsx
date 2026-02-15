@@ -1,0 +1,34 @@
+import { type ReactNode } from 'react';
+
+interface MetricCardProps {
+  title: string;
+  value: string;
+  subtitle?: string;
+  icon: ReactNode;
+  color: string;
+  glowColor: string;
+}
+
+export function MetricCard({ title, value, subtitle, icon, color, glowColor }: MetricCardProps) {
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-5 transition-all duration-300 hover:border-white/20 hover:shadow-lg hover:scale-[1.02]"
+      style={{ boxShadow: `0 0 40px -12px ${glowColor}` }}
+    >
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        style={{ background: `radial-gradient(ellipse at 50% 0%, ${glowColor}15, transparent 70%)` }}
+      />
+      <div className="relative z-10">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs font-medium uppercase tracking-wider text-gray-400">{title}</span>
+          <div className={`flex items-center justify-center w-9 h-9 rounded-xl ${color}`}>
+            {icon}
+          </div>
+        </div>
+        <div className="text-2xl font-bold text-white tracking-tight">{value}</div>
+        {subtitle && (
+          <div className="text-xs text-gray-500 mt-1">{subtitle}</div>
+        )}
+      </div>
+    </div>
+  );
+}
