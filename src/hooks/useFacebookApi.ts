@@ -9,17 +9,57 @@ const parseActions = (actions: Array<{ action_type: string; value: string }> | u
   return found ? parseFloat(found.value) : 0;
 };
 
+const parseActionsByCandidates = (
+  actions: Array<{ action_type: string; value: string }> | undefined,
+  candidates: string[]
+): number => {
+  if (!actions) return 0;
+  for (const candidate of candidates) {
+    const found = actions.find(a => a.action_type === candidate);
+    if (found) return parseFloat(found.value);
+  }
+  return 0;
+};
+
+const parseCostPerAction = (
+  actions: Array<{ action_type: string; value: string }> | undefined,
+  candidates: string[]
+): number => {
+  if (!actions) return 0;
+  for (const candidate of candidates) {
+    const found = actions.find(a => a.action_type === candidate);
+    if (found) return parseFloat(found.value);
+  }
+  return 0;
+};
+
+const messagingActionTypes = [
+  'onsite_conversion.messaging_conversation_started_7d',
+  'onsite_conversion.messaging_conversation_started',
+  'onsite_conversion.messaging_first_reply',
+];
+
 function parseInsightsRow(d: Record<string, unknown>): AccountInsights {
   const actions = d.actions as Array<{ action_type: string; value: string }> | undefined;
   const actionValues = d.action_values as Array<{ action_type: string; value: string }> | undefined;
+  const costPerActionType = d.cost_per_action_type as Array<{ action_type: string; value: string }> | undefined;
   const purchases = parseActions(actions, 'purchase');
+  const leads = parseActions(actions, 'lead');
+  const messagingConversations = parseActionsByCandidates(actions, messagingActionTypes);
   const purchaseValue = parseActions(actionValues, 'purchase');
   const spend = parseFloat(d.spend as string || '0');
+  const parsedCostPerMessaging = parseCostPerAction(costPerActionType, messagingActionTypes);
+  const costPerMessagingConversation = parsedCostPerMessaging > 0
+    ? parsedCostPerMessaging
+    : messagingConversations > 0
+      ? spend / messagingConversations
+      : 0;
 
   return {
     spend,
     impressions: parseInt(d.impressions as string || '0'),
     reach: parseInt(d.reach as string || '0'),
+    frequency: parseFloat(d.frequency as string || '0'),
     clicks: parseInt(d.clicks as string || '0'),
     cpc: parseFloat(d.cpc as string || '0'),
     cpm: parseFloat(d.cpm as string || '0'),
@@ -29,15 +69,17 @@ function parseInsightsRow(d: Record<string, unknown>): AccountInsights {
     roas: spend > 0 ? purchaseValue / spend : 0,
     costPerPurchase: purchases > 0 ? spend / purchases : 0,
     addToCart: parseActions(actions, 'add_to_cart'),
-    leads: parseActions(actions, 'lead'),
+    leads,
+    messagingConversations,
+    costPerMessagingConversation,
   };
 }
 
 const emptyInsights: AccountInsights = {
   spend: 0, impressions: 0, reach: 0, clicks: 0,
-  cpc: 0, cpm: 0, ctr: 0, purchases: 0,
+  frequency: 0, cpc: 0, cpm: 0, ctr: 0, purchases: 0,
   purchaseValue: 0, roas: 0, costPerPurchase: 0,
-  addToCart: 0, leads: 0,
+  addToCart: 0, leads: 0, messagingConversations: 0, costPerMessagingConversation: 0,
 };
 
 function parseDailyArray(data: Array<Record<string, unknown>>): DailyData[] {
@@ -103,7 +145,7 @@ export function useFacebookApi() {
     try {
       // Account-level insights
       const insightsRes = await fetch(
-        `${FB_API_BASE}/${account.id}/insights?fields=spend,impressions,reach,clicks,cpc,cpm,ctr,actions,action_values,cost_per_action_type&time_range={"since":"${dateRange.since}","until":"${dateRange.until}"}&access_token=${token}`
+        `${FB_API_BASE}/${account.id}/insights?fields=spend,impressions,reach,frequency,clicks,cpc,cpm,ctr,actions,action_values,cost_per_action_type&time_range={"since":"${dateRange.since}","until":"${dateRange.until}"}&access_token=${token}`
       );
       const insightsData = await insightsRes.json();
       if (insightsData.error) throw new Error(insightsData.error.message);
@@ -119,7 +161,7 @@ export function useFacebookApi() {
 
       // Campaign-level insights
       const campaignsRes = await fetch(
-        `${FB_API_BASE}/${account.id}/insights?fields=campaign_name,campaign_id,spend,impressions,reach,clicks,cpc,cpm,ctr,actions,action_values,cost_per_action_type&time_range={"since":"${dateRange.since}","until":"${dateRange.until}"}&level=campaign&limit=50&access_token=${token}`
+        `${FB_API_BASE}/${account.id}/insights?fields=campaign_name,campaign_id,spend,impressions,reach,frequency,clicks,cpc,cpm,ctr,actions,action_values,cost_per_action_type&time_range={"since":"${dateRange.since}","until":"${dateRange.until}"}&level=campaign&limit=50&access_token=${token}`
       );
       const campaignsData = await campaignsRes.json();
       if (!campaignsData.error) {
@@ -162,7 +204,7 @@ export function useFacebookApi() {
     try {
       // Campaign-specific insights
       const insightsRes = await fetch(
-        `${FB_API_BASE}/${campaignId}/insights?fields=spend,impressions,reach,clicks,cpc,cpm,ctr,actions,action_values,cost_per_action_type&time_range={"since":"${lastDateRange.since}","until":"${lastDateRange.until}"}&access_token=${token}`
+        `${FB_API_BASE}/${campaignId}/insights?fields=spend,impressions,reach,frequency,clicks,cpc,cpm,ctr,actions,action_values,cost_per_action_type&time_range={"since":"${lastDateRange.since}","until":"${lastDateRange.until}"}&access_token=${token}`
       );
       const insightsData = await insightsRes.json();
       if (insightsData.error) throw new Error(insightsData.error.message);

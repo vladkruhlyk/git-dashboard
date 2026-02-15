@@ -58,6 +58,7 @@ export function App() {
 
         {selectedAccount && insights && (
           <Dashboard
+            key={`${selectedAccount.id}-${selectedCampaignId || 'all'}`}
             account={selectedAccount}
             insights={insights}
             campaigns={campaigns}

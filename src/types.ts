@@ -12,6 +12,7 @@ export interface CampaignInsight {
   spend: string;
   impressions: string;
   reach: string;
+  frequency: string;
   clicks: string;
   cpc: string;
   cpm: string;
@@ -27,6 +28,7 @@ export interface AccountInsights {
   spend: number;
   impressions: number;
   reach: number;
+  frequency: number;
   clicks: number;
   cpc: number;
   cpm: number;
@@ -37,6 +39,8 @@ export interface AccountInsights {
   costPerPurchase: number;
   addToCart: number;
   leads: number;
+  messagingConversations: number;
+  costPerMessagingConversation: number;
 }
 
 export interface DailyData {
