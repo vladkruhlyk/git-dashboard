@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Key, Loader2, ExternalLink, LogOut, ChevronDown, ChevronRight, Folder, CalendarDays, Plus } from 'lucide-react';
+import { Key, Loader2, ExternalLink, LogOut, ChevronDown, CalendarDays } from 'lucide-react';
 import type { AdAccount, DateRange } from '../types';
 
 interface ApiSetupProps {
@@ -16,9 +16,6 @@ interface ApiSetupProps {
 }
 
 type DateField = 'since' | 'until';
-
-const GROUPS_STORAGE_KEY = 'account_custom_groups';
-const GROUP_NAMES_STORAGE_KEY = 'account_custom_group_names';
 
 const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 const weekNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -64,8 +61,6 @@ export function ApiSetup({
   const [inputToken, setInputToken] = useState(token);
   const [showDropdown, setShowDropdown] = useState(false);
   const [accountSearch, setAccountSearch] = useState('');
-  const [openedGroups, setOpenedGroups] = useState<Record<string, boolean>>({});
-  const [showGroupManager, setShowGroupManager] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>(() => {
     const today = new Date();
     const weekAgo = new Date(today);
@@ -77,28 +72,6 @@ export function ApiSetup({
   });
   const [openCalendarFor, setOpenCalendarFor] = useState<DateField | null>(null);
   const [visibleMonth, setVisibleMonth] = useState<Date>(() => parseDate(dateRange.until));
-
-  const [customGroups, setCustomGroups] = useState<Record<string, string>>(() => {
-    try {
-      const raw = localStorage.getItem(GROUPS_STORAGE_KEY);
-      return raw ? JSON.parse(raw) as Record<string, string> : {};
-    } catch {
-      return {};
-    }
-  });
-  const [customGroupNames, setCustomGroupNames] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem(GROUP_NAMES_STORAGE_KEY);
-      return raw ? JSON.parse(raw) as string[] : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const persistGroups = (next: Record<string, string>) => {
-    setCustomGroups(next);
-    localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(next));
-  };
 
   const handleConnect = async () => {
     onClearError();
@@ -140,59 +113,16 @@ export function ApiSetup({
     applyDateRange({ since: toISO(past), until: toISO(today) });
   };
 
-  const groupedAccounts = useMemo(() => {
+  const filteredAccounts = useMemo(() => {
     const normalizedSearch = accountSearch.trim().toLowerCase();
-    const groups: Record<string, AdAccount[]> = {};
-    for (const account of accounts) {
-      if (normalizedSearch) {
+    return accounts
+      .filter((account) => {
+        if (!normalizedSearch) return true;
         const haystack = `${account.name} ${account.account_id} ${account.currency}`.toLowerCase();
-        if (!haystack.includes(normalizedSearch)) continue;
-      }
-      const custom = customGroups[account.id]?.trim();
-      const parts = account.name.split('|');
-      const fallbackGroup = parts.length > 1 ? parts[0].trim() : 'Без папки';
-      const groupName = custom || fallbackGroup;
-      if (!groups[groupName]) groups[groupName] = [];
-      groups[groupName].push(account);
-    }
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b, 'ru'));
-  }, [accounts, customGroups, accountSearch]);
-
-  const allGroupNames = useMemo(() => {
-    const set = new Set<string>();
-    groupedAccounts.forEach(([name]) => set.add(name));
-    customGroupNames.forEach(name => set.add(name));
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
-  }, [groupedAccounts, customGroupNames]);
-
-  const createGroup = () => {
-    const entered = window.prompt('Название новой папки');
-    const groupName = entered?.trim();
-    if (!groupName) return;
-    setCustomGroupNames(prev => {
-      const next = prev.includes(groupName) ? prev : [...prev, groupName];
-      localStorage.setItem(GROUP_NAMES_STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
-    setOpenedGroups(prev => ({ ...prev, [groupName]: true }));
-  };
-
-  const assignGroup = (account: AdAccount, nextGroup: string) => {
-    const normalized = nextGroup.trim();
-    const nextMap = { ...customGroups };
-    if (!normalized) {
-      delete nextMap[account.id];
-    } else {
-      nextMap[account.id] = normalized;
-      setCustomGroupNames(prev => {
-        const next = prev.includes(normalized) ? prev : [...prev, normalized];
-        localStorage.setItem(GROUP_NAMES_STORAGE_KEY, JSON.stringify(next));
-        return next;
-      });
-    }
-    persistGroups(nextMap);
-    setOpenedGroups(prev => ({ ...prev, [normalized]: true }));
-  };
+        return haystack.includes(normalizedSearch);
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  }, [accounts, accountSearch]);
 
   if (!token || accounts.length === 0) {
     return (
@@ -291,22 +221,7 @@ export function ApiSetup({
             </button>
             {showDropdown && (
               <div className="absolute top-full left-0 mt-2 w-[420px] max-h-[520px] overflow-y-auto rounded-xl border border-white/10 bg-[#0d1117] shadow-2xl shadow-black/50 z-50">
-                <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 sticky top-0 bg-[#0d1117] z-10">
-                  <button
-                    onClick={() => setShowGroupManager(v => !v)}
-                    className="rounded-lg border border-white/10 px-2 py-1 text-xs text-gray-300 hover:bg-white/5"
-                  >
-                    {showGroupManager ? 'Закрыть управление' : 'Управлять папками'}
-                  </button>
-                  <button
-                    onClick={createGroup}
-                    className="rounded-lg border border-white/10 px-2 py-1 text-xs text-gray-300 hover:bg-white/5 inline-flex items-center gap-1"
-                  >
-                    <Plus className="w-3 h-3" />
-                    Новая папка
-                  </button>
-                </div>
-                <div className="px-3 py-2 border-b border-white/10 sticky top-[41px] bg-[#0d1117] z-10">
+                <div className="px-3 py-2 border-b border-white/10 sticky top-0 bg-[#0d1117] z-10">
                   <input
                     value={accountSearch}
                     onChange={(e) => setAccountSearch(e.target.value)}
@@ -315,61 +230,24 @@ export function ApiSetup({
                   />
                 </div>
 
-                {showGroupManager && (
-                  <div className="px-3 py-2 border-b border-white/10 bg-white/[0.02] text-xs text-gray-400">
-                    Для переноса кабинета выберите папку в выпадающем списке у нужной строки.
-                  </div>
-                )}
-
-                {groupedAccounts.length === 0 && (
+                {filteredAccounts.length === 0 && (
                   <div className="px-4 py-6 text-sm text-gray-500 text-center">
                     По вашему запросу кабинеты не найдены
                   </div>
                 )}
 
-                {groupedAccounts.map(([groupName, groupAccounts]) => {
-                  const isOpen = openedGroups[groupName] ?? true;
-                  return (
-                    <div key={groupName} className="border-b border-white/5 last:border-b-0">
-                      <button
-                        onClick={() => setOpenedGroups(prev => ({ ...prev, [groupName]: !isOpen }))}
-                        className="w-full px-3 py-2 text-left text-xs text-gray-400 uppercase tracking-wider flex items-center gap-2 hover:bg-white/[0.03]"
-                      >
-                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                        <Folder className="w-4 h-4" />
-                        <span className="truncate">{groupName}</span>
-                        <span className="ml-auto text-[10px] text-gray-500">{groupAccounts.length}</span>
-                      </button>
-                      {isOpen && groupAccounts.map((acc) => (
-                        <div key={acc.id} className="border-t border-white/5">
-                          <button
-                            onClick={() => handleSelectAccount(acc)}
-                            className={`w-full text-left pl-9 pr-4 py-3 hover:bg-white/5 transition-colors ${
-                              selectedAccount?.id === acc.id ? 'bg-indigo-500/10 text-indigo-400' : 'text-gray-300'
-                            }`}
-                          >
-                            <div className="font-medium text-sm">{acc.name}</div>
-                            <div className="text-xs text-gray-500 mt-0.5">ID: {acc.account_id} · {acc.currency}</div>
-                          </button>
-                          {showGroupManager && (
-                            <div className="px-9 pb-3">
-                              <select
-                                value={customGroups[acc.id] || ''}
-                                onChange={(e) => assignGroup(acc, e.target.value)}
-                                className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-gray-300"
-                              >
-                                <option value="">Авто (по названию)</option>
-                                {allGroupNames.map((name) => (
-                                  <option key={name} value={name}>{name}</option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
+                {filteredAccounts.map((acc) => (
+                  <button
+                    key={acc.id}
+                    onClick={() => handleSelectAccount(acc)}
+                    className={`w-full text-left px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0 ${
+                      selectedAccount?.id === acc.id ? 'bg-indigo-500/10 text-indigo-400' : 'text-gray-300'
+                    }`}
+                  >
+                    <div className="font-medium text-sm">{acc.name}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">ID: {acc.account_id} · {acc.currency}</div>
+                  </button>
+                ))}
               </div>
             )}
           </div>
