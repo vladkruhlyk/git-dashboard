@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DollarSign, Eye, Users, MousePointerClick,
   ShoppingCart, TrendingUp, Target, Layers,
-  BarChart3, Zap, Filter, X, ChevronDown, FileDown, Loader2, SlidersHorizontal, GripVertical, MessagesSquare,
+  BarChart3, Zap, Filter, X, ChevronDown, FileDown, Loader2, SlidersHorizontal,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -17,7 +17,6 @@ type MetricKey =
   | 'spend'
   | 'impressions'
   | 'reach'
-  | 'frequency'
   | 'clicks'
   | 'ctr'
   | 'cpc'
@@ -26,10 +25,7 @@ type MetricKey =
   | 'purchaseValue'
   | 'roas'
   | 'costPerPurchase'
-  | 'leads'
-  | 'messagingConversations'
-  | 'costPerMessagingConversation';
-type FunnelGoal = 'leads' | 'purchases';
+  | 'leads';
 
 interface DashboardProps {
   account: AdAccount;
@@ -57,18 +53,6 @@ const parseActions = (actions: Array<{ action_type: string; value: string }> | u
   return found ? parseFloat(found.value) : 0;
 };
 
-const parseActionsByCandidates = (
-  actions: Array<{ action_type: string; value: string }> | undefined,
-  candidates: string[]
-): number => {
-  if (!actions) return 0;
-  for (const candidate of candidates) {
-    const found = actions.find(a => a.action_type === candidate);
-    if (found) return parseFloat(found.value);
-  }
-  return 0;
-};
-
 const parseActionValues = (actions: Array<{ action_type: string; value: string }> | undefined, type: string): number => {
   if (!actions) return 0;
   const found = actions.find(a => a.action_type === type);
@@ -81,27 +65,15 @@ const chartOptions: Array<{ value: ChartMetricKey; label: string; chartLabel: st
   { value: 'clicks', label: 'Клики по дням', chartLabel: 'Клики', color: '#06b6d4' },
   { value: 'impressions', label: 'Показы по дням', chartLabel: 'Показы', color: '#f59e0b' },
 ];
-
-const messagingActionTypes = [
-  'onsite_conversion.messaging_conversation_started_7d',
-  'onsite_conversion.messaging_conversation_started',
-  'onsite_conversion.messaging_first_reply',
-];
-
 const METRICS_STORAGE_KEY = 'dashboard_visible_metrics';
-const METRIC_ORDER_STORAGE_KEY = 'dashboard_metric_order_by_account';
-
 const defaultMetricKeys: MetricKey[] = [
   'spend',
   'impressions',
   'reach',
-  'frequency',
   'clicks',
   'ctr',
   'cpc',
   'cpm',
-  'messagingConversations',
-  'costPerMessagingConversation',
   'purchases',
   'purchaseValue',
   'roas',
@@ -109,33 +81,14 @@ const defaultMetricKeys: MetricKey[] = [
   'leads',
 ];
 
-const baseMetricKeys: MetricKey[] = ['spend', 'impressions', 'clicks', 'ctr', 'cpc', 'purchases'];
-
-const moveMetric = (arr: MetricKey[], source: MetricKey, target: MetricKey): MetricKey[] => {
-  const sourceIdx = arr.indexOf(source);
-  const targetIdx = arr.indexOf(target);
-  if (sourceIdx < 0 || targetIdx < 0 || sourceIdx === targetIdx) return arr;
-
-  const next = [...arr];
-  next.splice(sourceIdx, 1);
-  next.splice(targetIdx, 0, source);
-  return next;
-};
-
 export function Dashboard({
   account, insights, campaigns, dailyData,
   selectedCampaignId, onSelectCampaign, onClearCampaign,
 }: DashboardProps) {
   const [chartMetric, setChartMetric] = useState<ChartMetricKey>('purchases');
   const [showChartDropdown, setShowChartDropdown] = useState(false);
-  const [showFunnelGoalDropdown, setShowFunnelGoalDropdown] = useState(false);
-  const [funnelGoal, setFunnelGoal] = useState<FunnelGoal>(() => {
-    const raw = localStorage.getItem('dashboard_funnel_goal');
-    return raw === 'purchases' ? 'purchases' : 'leads';
-  });
   const [showMetricsDropdown, setShowMetricsDropdown] = useState(false);
   const [isExportingImage, setIsExportingImage] = useState(false);
-  const [draggingMetricKey, setDraggingMetricKey] = useState<MetricKey | null>(null);
   const [visibleMetricKeys, setVisibleMetricKeys] = useState<MetricKey[]>(() => {
     try {
       const raw = localStorage.getItem(METRICS_STORAGE_KEY);
@@ -145,14 +98,6 @@ export function Dashboard({
       return normalized.length > 0 ? normalized : defaultMetricKeys;
     } catch {
       return defaultMetricKeys;
-    }
-  });
-  const [metricOrderByAccount, setMetricOrderByAccount] = useState<Record<string, MetricKey[]>>(() => {
-    try {
-      const raw = localStorage.getItem(METRIC_ORDER_STORAGE_KEY);
-      return raw ? JSON.parse(raw) as Record<string, MetricKey[]> : {};
-    } catch {
-      return {};
     }
   });
   const [exportError, setExportError] = useState<string | null>(null);
@@ -167,14 +112,6 @@ export function Dashboard({
   useEffect(() => {
     localStorage.setItem(METRICS_STORAGE_KEY, JSON.stringify(visibleMetricKeys));
   }, [visibleMetricKeys]);
-
-  useEffect(() => {
-    localStorage.setItem(METRIC_ORDER_STORAGE_KEY, JSON.stringify(metricOrderByAccount));
-  }, [metricOrderByAccount]);
-
-  useEffect(() => {
-    localStorage.setItem('dashboard_funnel_goal', funnelGoal);
-  }, [funnelGoal]);
 
   const metrics = [
     {
@@ -200,14 +137,6 @@ export function Dashboard({
       icon: <Users className="w-5 h-5 text-cyan-400" />,
       color: 'bg-cyan-500/20',
       glowColor: '#06b6d4',
-    },
-    {
-      key: 'frequency' as MetricKey,
-      title: 'Частота',
-      value: insights.frequency.toFixed(2),
-      icon: <BarChart3 className="w-5 h-5 text-purple-400" />,
-      color: 'bg-purple-500/20',
-      glowColor: '#a855f7',
     },
     {
       key: 'clicks' as MetricKey,
@@ -240,22 +169,6 @@ export function Dashboard({
       icon: <Layers className="w-5 h-5 text-pink-400" />,
       color: 'bg-pink-500/20',
       glowColor: '#ec4899',
-    },
-    {
-      key: 'messagingConversations' as MetricKey,
-      title: 'Начало переписки',
-      value: formatNum(insights.messagingConversations),
-      icon: <MessagesSquare className="w-5 h-5 text-sky-400" />,
-      color: 'bg-sky-500/20',
-      glowColor: '#0ea5e9',
-    },
-    {
-      key: 'costPerMessagingConversation' as MetricKey,
-      title: 'Цена начала переписки',
-      value: formatMoney(insights.costPerMessagingConversation),
-      icon: <DollarSign className="w-5 h-5 text-rose-400" />,
-      color: 'bg-rose-500/20',
-      glowColor: '#f43f5e',
     },
     {
       key: 'purchases' as MetricKey,
@@ -299,30 +212,7 @@ export function Dashboard({
       glowColor: '#6366f1',
     },
   ];
-
-  const metricMap = useMemo(() => {
-    return Object.fromEntries(metrics.map(m => [m.key, m])) as Record<MetricKey, typeof metrics[number]>;
-  }, [metrics]);
-
-  const orderedMetricKeys = useMemo(() => {
-    const saved = metricOrderByAccount[account.id];
-    if (!saved || saved.length === 0) return defaultMetricKeys;
-    const filtered = saved.filter(k => defaultMetricKeys.includes(k));
-    const missing = defaultMetricKeys.filter(k => !filtered.includes(k));
-    return [...filtered, ...missing];
-  }, [account.id, metricOrderByAccount]);
-
-  const visibleMetrics = orderedMetricKeys
-    .filter(k => visibleMetricKeys.includes(k))
-    .map(k => metricMap[k])
-    .filter(Boolean);
-
-  const tooltipStyle = {
-    backgroundColor: '#0d1117',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '12px',
-    color: '#fff',
-  };
+  const visibleMetrics = metrics.filter(m => visibleMetricKeys.includes(m.key));
 
   const toggleMetric = (metricKey: MetricKey) => {
     const isVisible = visibleMetricKeys.includes(metricKey);
@@ -334,13 +224,11 @@ export function Dashboard({
     );
   };
 
-  const reorderMetrics = (source: MetricKey, target: MetricKey) => {
-    const nextOrder = moveMetric(orderedMetricKeys, source, target);
-    setMetricOrderByAccount(prev => ({ ...prev, [account.id]: nextOrder }));
-  };
-
-  const resetMetricOrder = () => {
-    setMetricOrderByAccount(prev => ({ ...prev, [account.id]: defaultMetricKeys }));
+  const tooltipStyle = {
+    backgroundColor: '#0d1117',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '12px',
+    color: '#fff',
   };
 
   const handleExportImage = async () => {
@@ -401,13 +289,9 @@ export function Dashboard({
     }
   };
 
-  const funnelGoalValue = funnelGoal === 'leads' ? insights.leads : insights.purchases;
-  const funnelGoalLabel = funnelGoal === 'leads' ? 'Лиды' : 'Покупки';
-  const ctrFromImpressions = insights.impressions > 0 ? (insights.clicks / insights.impressions) * 100 : 0;
-  const finalFromClicks = insights.clicks > 0 ? (funnelGoalValue / insights.clicks) * 100 : 0;
-
   return (
-    <div ref={dashboardRef} className="max-w-[1600px] mx-auto px-6 py-8 space-y-8 animate-dashboard-enter">
+    <div ref={dashboardRef} className="max-w-[1600px] mx-auto px-6 py-8 space-y-8">
+      {/* Account header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white">{account.name}</h2>
@@ -427,7 +311,7 @@ export function Dashboard({
             {showMetricsDropdown && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowMetricsDropdown(false)} />
-                <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-white/10 bg-[#0d1117] p-2 shadow-2xl shadow-black/60">
+                <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-white/10 bg-[#0d1117] p-2 shadow-2xl shadow-black/60">
                   <div className="mb-2 flex items-center gap-2">
                     <button
                       onClick={() => setVisibleMetricKeys(defaultMetricKeys)}
@@ -436,22 +320,14 @@ export function Dashboard({
                       Все
                     </button>
                     <button
-                      onClick={() => setVisibleMetricKeys(baseMetricKeys)}
+                      onClick={() => setVisibleMetricKeys(defaultMetricKeys.slice(0, 6))}
                       className="rounded-lg border border-white/10 px-2 py-1 text-xs text-gray-300 hover:bg-white/5"
                     >
                       База
                     </button>
-                    <button
-                      onClick={resetMetricOrder}
-                      className="rounded-lg border border-white/10 px-2 py-1 text-xs text-gray-300 hover:bg-white/5"
-                    >
-                      Сброс порядка
-                    </button>
                   </div>
                   <div className="max-h-64 overflow-y-auto space-y-1">
-                    {orderedMetricKeys.map((metricKey) => {
-                      const metric = metricMap[metricKey];
-                      if (!metric) return null;
+                    {metrics.map((metric) => {
                       const checked = visibleMetricKeys.includes(metric.key);
                       return (
                         <button
@@ -491,6 +367,7 @@ export function Dashboard({
         </div>
       )}
 
+      {/* Campaign filter banner */}
       {selectedCampaignName && (
         <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-indigo-500/10 border border-indigo-500/20 px-5 py-4 animate-in">
           <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-500/20 shrink-0">
@@ -510,102 +387,17 @@ export function Dashboard({
         </div>
       )}
 
+      {/* Metrics grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
         {visibleMetrics.map((m) => (
-          <div
-            key={m.key}
-            draggable
-            onDragStart={() => setDraggingMetricKey(m.key)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => {
-              if (draggingMetricKey && draggingMetricKey !== m.key) reorderMetrics(draggingMetricKey, m.key);
-              setDraggingMetricKey(null);
-            }}
-            onDragEnd={() => setDraggingMetricKey(null)}
-            className="group/metric relative"
-          >
-            <div className="absolute top-2 right-2 z-20 opacity-0 group-hover/metric:opacity-100 transition-opacity text-gray-500">
-              <GripVertical className="w-4 h-4" />
-            </div>
-            <MetricCard {...m} />
-          </div>
+          <MetricCard key={m.title} {...m} />
         ))}
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">Воронка конверсий</h3>
-          <div className="relative" data-export-ignore="true">
-            <button
-              onClick={() => setShowFunnelGoalDropdown(v => !v)}
-              className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300 hover:bg-white/10"
-            >
-              Цель: {funnelGoalLabel}
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showFunnelGoalDropdown ? 'rotate-180' : ''}`} />
-            </button>
-            {showFunnelGoalDropdown && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowFunnelGoalDropdown(false)} />
-                <div className="absolute right-0 top-full z-50 mt-2 w-36 overflow-hidden rounded-lg border border-white/10 bg-[#0d1117] shadow-xl">
-                  <button
-                    onClick={() => {
-                      setFunnelGoal('leads');
-                      setShowFunnelGoalDropdown(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left text-xs ${funnelGoal === 'leads' ? 'bg-indigo-500/10 text-indigo-300' : 'text-gray-300 hover:bg-white/5'}`}
-                  >
-                    Лиды
-                  </button>
-                  <button
-                    onClick={() => {
-                      setFunnelGoal('purchases');
-                      setShowFunnelGoalDropdown(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left text-xs ${funnelGoal === 'purchases' ? 'bg-indigo-500/10 text-indigo-300' : 'text-gray-300 hover:bg-white/5'}`}
-                  >
-                    Покупки
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-300">Показы → Клики</span>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-gray-400">{formatNum(insights.impressions)} → {formatNum(insights.clicks)}</span>
-                <span className="text-indigo-300">CTR: {ctrFromImpressions.toFixed(2)}%</span>
-              </div>
-            </div>
-            <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all duration-500"
-                style={{ width: `${Math.max(4, Math.min(100, ctrFromImpressions))}%` }}
-              />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-300">Клики → {funnelGoalLabel}</span>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-gray-400">{formatNum(insights.clicks)} → {formatNum(funnelGoalValue)}</span>
-                <span className="text-indigo-300">CR: {finalFromClicks.toFixed(2)}%</span>
-              </div>
-            </div>
-            <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-emerald-400 transition-all duration-500"
-                style={{ width: `${Math.max(4, Math.min(100, finalFromClicks))}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
+      {/* Charts */}
       {dailyData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Spend chart */}
           <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6">
             <h3 className="text-lg font-semibold text-white mb-4">Расход по дням</h3>
             <ResponsiveContainer width="100%" height={280}>
@@ -625,12 +417,14 @@ export function Dashboard({
             </ResponsiveContainer>
           </div>
 
+          {/* Dynamic metric chart with dropdown */}
           <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white">
                 {activeChartOption.chartLabel} по дням
               </h3>
-              <div className="relative" data-export-ignore="true">
+              {/* Custom dropdown */}
+              <div className="relative">
                 <button
                   onClick={() => setShowChartDropdown(!showChartDropdown)}
                   className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-gray-300 hover:bg-white/10 hover:border-white/20 transition-all"
@@ -655,7 +449,10 @@ export function Dashboard({
                               : 'text-gray-400 hover:bg-white/5 hover:text-white'
                           }`}
                         >
-                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: opt.color }} />
+                          <div
+                            className="w-3 h-3 rounded-full shrink-0"
+                            style={{ backgroundColor: opt.color }}
+                          />
                           {opt.label}
                         </button>
                       ))}
@@ -676,11 +473,17 @@ export function Dashboard({
                 <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
                 <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey={chartMetric} fill="url(#dynamicBarGrad)" radius={[4, 4, 0, 0]} name={activeChartOption.chartLabel} />
+                <Bar
+                  dataKey={chartMetric}
+                  fill="url(#dynamicBarGrad)"
+                  radius={[4, 4, 0, 0]}
+                  name={activeChartOption.chartLabel}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
+          {/* Revenue vs Spend */}
           <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6 lg:col-span-2">
             <h3 className="text-lg font-semibold text-white mb-4">Расход vs Выручка</h3>
             <ResponsiveContainer width="100%" height={280}>
@@ -707,11 +510,14 @@ export function Dashboard({
         </div>
       )}
 
+      {/* Campaigns table */}
       {campaigns.length > 0 && (
         <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-white">Кампании</h3>
-            <p className="text-xs text-gray-500">Нажмите на кампанию для фильтрации дашборда</p>
+            <p className="text-xs text-gray-500">
+              Нажмите на кампанию для фильтрации дашборда
+            </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -720,11 +526,10 @@ export function Dashboard({
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Кампания</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Расход</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Показы</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Частота</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Охват</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Клики</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">CTR</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">CPC</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Переписки</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Покупки</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Ценность</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">ROAS</th>
@@ -734,7 +539,6 @@ export function Dashboard({
                 {campaigns.map((c, i) => {
                   const spend = parseFloat(c.spend || '0');
                   const purchases = parseActions(c.actions, 'purchase');
-                  const messaging = parseActionsByCandidates(c.actions, messagingActionTypes);
                   const purchaseValue = parseActionValues(c.action_values, 'purchase');
                   const roas = spend > 0 ? purchaseValue / spend : 0;
                   const isSelected = selectedCampaignId === c.campaign_id;
@@ -759,15 +563,30 @@ export function Dashboard({
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right text-gray-300">{formatMoney(spend)}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{formatNum(parseInt(c.impressions || '0'))}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{parseFloat(c.frequency || '0').toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{formatNum(parseInt(c.clicks || '0'))}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{parseFloat(c.ctr || '0').toFixed(2)}%</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{formatMoney(parseFloat(c.cpc || '0'))}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{formatNum(messaging)}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{purchases}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{formatMoney(purchaseValue)}</td>
+                      <td className="px-4 py-3 text-right text-gray-300">
+                        {formatMoney(spend)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-300">
+                        {formatNum(parseInt(c.impressions || '0'))}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-300">
+                        {formatNum(parseInt(c.reach || '0'))}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-300">
+                        {formatNum(parseInt(c.clicks || '0'))}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-300">
+                        {parseFloat(c.ctr || '0').toFixed(2)}%
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-300">
+                        {formatMoney(parseFloat(c.cpc || '0'))}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-300">
+                        {purchases}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-300">
+                        {formatMoney(purchaseValue)}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <span className={`inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-medium ${
                           roas >= 2 ? 'bg-emerald-500/10 text-emerald-400' :
