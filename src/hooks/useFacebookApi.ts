@@ -82,16 +82,27 @@ const parseCreativePreview = (creative: Record<string, unknown> | undefined): Cr
   const videoCallToAction = videoData?.call_to_action as Record<string, unknown> | undefined;
   const videoCallToActionValue = videoCallToAction?.value as Record<string, unknown> | undefined;
 
+  const hasVideo = Boolean((creative.video_id as string | undefined) || (videoData?.video_id as string | undefined));
+  const hasImage = Boolean(
+    (creative.image_url as string | undefined)
+    || (linkData?.picture as string | undefined)
+    || (videoData?.image_url as string | undefined)
+    || (creative.thumbnail_url as string | undefined)
+    || (creative.image_hash as string | undefined)
+    || (linkData?.image_hash as string | undefined)
+  );
+
   return {
     id: creative.id as string | undefined,
     name: creative.name as string | undefined,
     thumbnail_url: creative.thumbnail_url as string | undefined,
     image_hash: (creative.image_hash as string | undefined) || (linkData?.image_hash as string | undefined),
+    media_type: hasVideo ? 'video' : hasImage ? 'image' : 'unknown',
     image_url: (creative.image_url as string | undefined)
       || (linkData?.picture as string | undefined)
       || (videoData?.image_url as string | undefined)
       || (creative.thumbnail_url as string | undefined),
-    video_id: creative.video_id as string | undefined,
+    video_id: (creative.video_id as string | undefined) || (videoData?.video_id as string | undefined),
     body: (creative.body as string | undefined)
       || (linkData?.message as string | undefined)
       || (videoData?.message as string | undefined),
@@ -364,6 +375,11 @@ export function useFacebookApi() {
           .map((creative) => creative?.image_hash)
           .filter((value): value is string => Boolean(value))
       ));
+      const videoIds = Array.from(new Set(
+        Array.from(creativeByAdId.values())
+          .map((creative) => creative?.video_id)
+          .filter((value): value is string => Boolean(value))
+      ));
 
       const imageUrlByHash = new Map<string, string>();
       if (imageHashes.length > 0) {
@@ -386,6 +402,28 @@ export function useFacebookApi() {
         const originalUrl = imageUrlByHash.get(creative.image_hash);
         if (originalUrl) {
           creative.image_url = originalUrl;
+        }
+      }
+
+      if (videoIds.length > 0) {
+        const videoBatchRes = await fetch(
+          `${FB_API_BASE}/?ids=${encodeURIComponent(videoIds.join(','))}&fields=source,picture,thumbnails&access_token=${token}`
+        );
+        const videoBatchData = await videoBatchRes.json();
+        if (!videoBatchData.error) {
+          for (const [videoId, payload] of Object.entries(videoBatchData as Record<string, Record<string, unknown>>)) {
+            for (const creative of creativeByAdId.values()) {
+              if (creative?.video_id !== videoId) continue;
+              const thumbnails = payload.thumbnails as { data?: Array<Record<string, unknown>> } | undefined;
+              const bestThumbnail = thumbnails?.data?.[0]?.uri as string | undefined;
+              creative.video_source = payload.source as string | undefined;
+              creative.thumbnail_url = (payload.picture as string | undefined) || bestThumbnail || creative.thumbnail_url;
+              if (!creative.image_url) {
+                creative.image_url = creative.thumbnail_url;
+              }
+              creative.media_type = creative.video_source ? 'video' : 'image';
+            }
+          }
         }
       }
 

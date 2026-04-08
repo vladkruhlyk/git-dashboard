@@ -35,7 +35,9 @@ export interface CreativePreview {
   thumbnail_url?: string;
   image_url?: string;
   image_hash?: string;
+  media_type?: 'image' | 'video' | 'unknown';
   video_id?: string;
+  video_source?: string;
   body?: string;
   title?: string;
   link_url?: string;

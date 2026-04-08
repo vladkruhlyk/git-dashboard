@@ -1128,7 +1128,16 @@ export function Dashboard({
 
             <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
               <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
-                {creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url ? (
+                {creativePreview.creative?.media_type === 'video' && creativePreview.creative?.video_source ? (
+                  <video
+                    src={creativePreview.creative.video_source}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    poster={creativePreview.creative.thumbnail_url || creativePreview.creative.image_url}
+                    className="h-[520px] w-full bg-[#080d14]"
+                  />
+                ) : creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url ? (
                   <img
                     src={creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url}
                     alt={creativePreview.name}
@@ -1171,9 +1180,15 @@ export function Dashboard({
                 </div>
                 {(creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url) && (
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="text-xs uppercase tracking-[0.18em] text-gray-500">Исходное изображение</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-gray-500">
+                      {creativePreview.creative?.media_type === 'video' ? 'Исходный файл' : 'Исходное изображение'}
+                    </div>
                     <a
-                      href={creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url}
+                      href={
+                        creativePreview.creative?.video_source
+                        || creativePreview.creative?.image_url
+                        || creativePreview.creative?.thumbnail_url
+                      }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-2 block break-all text-sm text-indigo-300 hover:text-indigo-200"
