@@ -139,9 +139,9 @@ const messagingActionTypes = [
   'onsite_conversion.messaging_first_reply',
 ];
 
-const METRICS_STORAGE_KEY = 'dashboard_visible_metrics';
-const METRIC_ORDER_STORAGE_KEY = 'dashboard_metric_order_by_account';
-const BREAKDOWN_COLUMNS_STORAGE_KEY = 'dashboard_breakdown_visible_columns';
+const getMetricsStorageKey = (accountId: string) => `dashboard_visible_metrics:${accountId}`;
+const getMetricOrderStorageKey = (accountId: string) => `dashboard_metric_order:${accountId}`;
+const getBreakdownColumnsStorageKey = (accountId: string) => `dashboard_breakdown_visible_columns:${accountId}`;
 
 const defaultMetricKeys: MetricKey[] = [
   'spend',
@@ -218,7 +218,7 @@ export function Dashboard({
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [visibleMetricKeys, setVisibleMetricKeys] = useState<MetricKey[]>(() => {
     try {
-      const raw = localStorage.getItem(METRICS_STORAGE_KEY);
+      const raw = localStorage.getItem(getMetricsStorageKey(account.id));
       if (!raw) return defaultMetricKeys;
       const parsed = JSON.parse(raw) as unknown;
       if (!Array.isArray(parsed)) return defaultMetricKeys;
@@ -230,7 +230,7 @@ export function Dashboard({
   });
   const [visibleBreakdownColumns, setVisibleBreakdownColumns] = useState<BreakdownColumnKey[]>(() => {
     try {
-      const raw = localStorage.getItem(BREAKDOWN_COLUMNS_STORAGE_KEY);
+      const raw = localStorage.getItem(getBreakdownColumnsStorageKey(account.id));
       if (!raw) return defaultBreakdownColumnKeys;
       const parsed = JSON.parse(raw) as unknown;
       if (!Array.isArray(parsed)) return defaultBreakdownColumnKeys;
@@ -242,12 +242,14 @@ export function Dashboard({
   });
   const [metricOrderByAccount, setMetricOrderByAccount] = useState<Record<string, MetricKey[]>>(() => {
     try {
-      const raw = localStorage.getItem(METRIC_ORDER_STORAGE_KEY);
-      if (!raw) return {};
+      const raw = localStorage.getItem(getMetricOrderStorageKey(account.id));
+      if (!raw) return { [account.id]: defaultMetricKeys };
       const parsed = JSON.parse(raw) as unknown;
-      return parsed && typeof parsed === 'object' ? parsed as Record<string, MetricKey[]> : {};
+      if (!Array.isArray(parsed)) return { [account.id]: defaultMetricKeys };
+      const normalized = defaultMetricKeys.filter((key) => parsed.includes(key));
+      return { [account.id]: normalized.length > 0 ? normalized : defaultMetricKeys };
     } catch {
-      return {};
+      return { [account.id]: defaultMetricKeys };
     }
   });
   const [exportError, setExportError] = useState<string | null>(null);
@@ -260,16 +262,19 @@ export function Dashboard({
     : null;
 
   useEffect(() => {
-    localStorage.setItem(METRICS_STORAGE_KEY, JSON.stringify(visibleMetricKeys));
-  }, [visibleMetricKeys]);
+    localStorage.setItem(getMetricsStorageKey(account.id), JSON.stringify(visibleMetricKeys));
+  }, [account.id, visibleMetricKeys]);
 
   useEffect(() => {
-    localStorage.setItem(METRIC_ORDER_STORAGE_KEY, JSON.stringify(metricOrderByAccount));
-  }, [metricOrderByAccount]);
+    localStorage.setItem(
+      getMetricOrderStorageKey(account.id),
+      JSON.stringify(metricOrderByAccount[account.id] || defaultMetricKeys)
+    );
+  }, [account.id, metricOrderByAccount]);
 
   useEffect(() => {
-    localStorage.setItem(BREAKDOWN_COLUMNS_STORAGE_KEY, JSON.stringify(visibleBreakdownColumns));
-  }, [visibleBreakdownColumns]);
+    localStorage.setItem(getBreakdownColumnsStorageKey(account.id), JSON.stringify(visibleBreakdownColumns));
+  }, [account.id, visibleBreakdownColumns]);
 
   useEffect(() => {
     localStorage.setItem('dashboard_funnel_goal', funnelGoal);
