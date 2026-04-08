@@ -1132,10 +1132,10 @@ export function Dashboard({
                   <img
                     src={creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url}
                     alt={creativePreview.name}
-                    className="h-[420px] w-full object-contain bg-[#080d14]"
+                    className="h-[520px] w-full object-contain bg-[#080d14]"
                   />
                 ) : (
-                  <div className="flex h-[360px] items-center justify-center text-sm text-gray-500">
+                  <div className="flex h-[520px] items-center justify-center text-sm text-gray-500">
                     Превью картинки недоступно. Возможно, у объявления только видео или внешний объект.
                   </div>
                 )}

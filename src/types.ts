@@ -34,6 +34,7 @@ export interface CreativePreview {
   name?: string;
   thumbnail_url?: string;
   image_url?: string;
+  image_hash?: string;
   video_id?: string;
   body?: string;
   title?: string;
