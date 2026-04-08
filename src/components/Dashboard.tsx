@@ -764,78 +764,6 @@ export function Dashboard({
         ))}
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">Воронка конверсий</h3>
-          <div className="relative" data-export-ignore="true">
-            <button
-              onClick={() => setShowFunnelGoalDropdown(v => !v)}
-              className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300 hover:bg-white/10"
-            >
-              Цель: {funnelGoalLabel}
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showFunnelGoalDropdown ? 'rotate-180' : ''}`} />
-            </button>
-            {showFunnelGoalDropdown && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowFunnelGoalDropdown(false)} />
-                <div className="absolute right-0 top-full z-50 mt-2 w-36 overflow-hidden rounded-lg border border-white/10 bg-[#0d1117] shadow-xl">
-                  <button
-                    onClick={() => {
-                      setFunnelGoal('leads');
-                      setShowFunnelGoalDropdown(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left text-xs ${funnelGoal === 'leads' ? 'bg-indigo-500/10 text-indigo-300' : 'text-gray-300 hover:bg-white/5'}`}
-                  >
-                    Лиды
-                  </button>
-                  <button
-                    onClick={() => {
-                      setFunnelGoal('purchases');
-                      setShowFunnelGoalDropdown(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left text-xs ${funnelGoal === 'purchases' ? 'bg-indigo-500/10 text-indigo-300' : 'text-gray-300 hover:bg-white/5'}`}
-                  >
-                    Покупки
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-300">Показы → Клики</span>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-gray-400">{formatNum(insights.impressions)} → {formatNum(insights.clicks)}</span>
-                <span className="text-indigo-300">CTR: {ctrFromImpressions.toFixed(2)}%</span>
-              </div>
-            </div>
-            <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all duration-500"
-                style={{ width: `${Math.max(4, Math.min(100, ctrFromImpressions))}%` }}
-              />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-300">Клики → {funnelGoalLabel}</span>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-gray-400">{formatNum(insights.clicks)} → {formatNum(funnelGoalValue)}</span>
-                <span className="text-indigo-300">CR: {finalFromClicks.toFixed(2)}%</span>
-              </div>
-            </div>
-            <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-emerald-400 transition-all duration-500"
-                style={{ width: `${Math.max(4, Math.min(100, finalFromClicks))}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
       {dailyData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6">
@@ -1181,6 +1109,78 @@ export function Dashboard({
           )}
         </div>
       )}
+
+      <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">Воронка конверсий</h3>
+          <div className="relative" data-export-ignore="true">
+            <button
+              onClick={() => setShowFunnelGoalDropdown(v => !v)}
+              className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300 hover:bg-white/10"
+            >
+              Цель: {funnelGoalLabel}
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showFunnelGoalDropdown ? 'rotate-180' : ''}`} />
+            </button>
+            {showFunnelGoalDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowFunnelGoalDropdown(false)} />
+                <div className="absolute right-0 top-full z-50 mt-2 w-36 overflow-hidden rounded-lg border border-white/10 bg-[#0d1117] shadow-xl">
+                  <button
+                    onClick={() => {
+                      setFunnelGoal('leads');
+                      setShowFunnelGoalDropdown(false);
+                    }}
+                    className={`w-full px-3 py-2 text-left text-xs ${funnelGoal === 'leads' ? 'bg-indigo-500/10 text-indigo-300' : 'text-gray-300 hover:bg-white/5'}`}
+                  >
+                    Лиды
+                  </button>
+                  <button
+                    onClick={() => {
+                      setFunnelGoal('purchases');
+                      setShowFunnelGoalDropdown(false);
+                    }}
+                    className={`w-full px-3 py-2 text-left text-xs ${funnelGoal === 'purchases' ? 'bg-indigo-500/10 text-indigo-300' : 'text-gray-300 hover:bg-white/5'}`}
+                  >
+                    Покупки
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-300">Показы → Клики</span>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-gray-400">{formatNum(insights.impressions)} → {formatNum(insights.clicks)}</span>
+                <span className="text-indigo-300">CTR: {ctrFromImpressions.toFixed(2)}%</span>
+              </div>
+            </div>
+            <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all duration-500"
+                style={{ width: `${Math.max(4, Math.min(100, ctrFromImpressions))}%` }}
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-300">Клики → {funnelGoalLabel}</span>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-gray-400">{formatNum(insights.clicks)} → {formatNum(funnelGoalValue)}</span>
+                <span className="text-indigo-300">CR: {finalFromClicks.toFixed(2)}%</span>
+              </div>
+            </div>
+            <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-emerald-400 transition-all duration-500"
+                style={{ width: `${Math.max(4, Math.min(100, finalFromClicks))}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {creativePreview && (
         <>
