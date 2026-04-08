@@ -17,6 +17,7 @@ export function App() {
     currentDateRange, campaignNodesById, loadingCampaignTreeId, loadCampaignTree,
   } = useFacebookApi();
   const [showAccountSettings, setShowAccountSettings] = useState(false);
+  const [accountSettingsSearch, setAccountSettingsSearch] = useState('');
   const [visibleAccountIds, setVisibleAccountIds] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem(VISIBLE_ACCOUNTS_STORAGE_KEY);
@@ -50,6 +51,15 @@ export function App() {
     const visible = accounts.filter((account) => visibleAccountIds.includes(account.id));
     return visible.length > 0 ? visible : accounts;
   }, [accounts, visibleAccountIds]);
+
+  const filteredAccountSettings = useMemo(() => {
+    const normalized = accountSettingsSearch.trim().toLowerCase();
+    if (!normalized) return accounts;
+    return accounts.filter((account) => {
+      const haystack = `${account.name} ${account.account_id} ${account.currency}`.toLowerCase();
+      return haystack.includes(normalized);
+    });
+  }, [accounts, accountSettingsSearch]);
 
   const toggleVisibleAccount = (accountId: string) => {
     setVisibleAccountIds((prev) => {
@@ -96,7 +106,7 @@ export function App() {
           onClearError={() => setError(null)}
         />
 
-        {selectedAccount && insights && (
+        {accounts.length > 0 && (
           <div className="mx-auto flex max-w-[1800px] gap-6 px-4 py-6 md:px-6">
             <aside className="sticky top-24 hidden h-[calc(100vh-8rem)] w-80 shrink-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#0b1018]/85 backdrop-blur-xl lg:block">
               <div className="border-b border-white/5 px-5 py-5">
@@ -124,8 +134,16 @@ export function App() {
                     <CheckSquare className="h-4 w-4 text-indigo-300" />
                     Настройки отображения кабинетов
                   </div>
+                  <div className="mb-3">
+                    <input
+                      value={accountSettingsSearch}
+                      onChange={(e) => setAccountSettingsSearch(e.target.value)}
+                      placeholder="Поиск кабинета в настройках"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none"
+                    />
+                  </div>
                   <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                    {accounts.map((account) => {
+                    {filteredAccountSettings.map((account) => {
                       const checked = visibleAccountIds.includes(account.id);
                       return (
                         <button
@@ -145,6 +163,11 @@ export function App() {
                         </button>
                       );
                     })}
+                    {filteredAccountSettings.length === 0 && (
+                      <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-4 text-sm text-gray-500">
+                        Поиск ничего не нашёл.
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -182,38 +205,37 @@ export function App() {
             </aside>
 
             <div className="min-w-0 flex-1">
-              <Dashboard
-                key={`${selectedAccount.id}-${selectedCampaignId || 'all'}`}
-                account={selectedAccount}
-                insights={insights}
-                campaigns={campaigns}
-                dailyData={dailyData}
-                selectedCampaignId={selectedCampaignId}
-                onSelectCampaign={selectCampaign}
-                onClearCampaign={clearCampaignSelection}
-                campaignNodesById={campaignNodesById}
-                loadingCampaignTreeId={loadingCampaignTreeId}
-                onLoadCampaignTree={loadCampaignTree}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Show account selection prompt after connecting */}
-        {accounts.length > 0 && !selectedAccount && (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center space-y-4">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-white/10">
-                <svg className="w-8 h-8 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                  <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-white">
-                Найдено {accounts.length} рекламных кабинетов
-              </h3>
-              <p className="text-gray-400">
-                Выберите рекламный кабинет в меню сверху для просмотра статистики
-              </p>
+              {selectedAccount && insights ? (
+                <Dashboard
+                  key={`${selectedAccount.id}-${selectedCampaignId || 'all'}`}
+                  account={selectedAccount}
+                  insights={insights}
+                  campaigns={campaigns}
+                  dailyData={dailyData}
+                  selectedCampaignId={selectedCampaignId}
+                  onSelectCampaign={selectCampaign}
+                  onClearCampaign={clearCampaignSelection}
+                  campaignNodesById={campaignNodesById}
+                  loadingCampaignTreeId={loadingCampaignTreeId}
+                  onLoadCampaignTree={loadCampaignTree}
+                />
+              ) : (
+                <div className="flex min-h-[60vh] items-center justify-center">
+                  <div className="text-center space-y-4">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-white/10">
+                      <svg className="w-8 h-8 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                        <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-white">
+                      Найдено {accounts.length} рекламных кабинетов
+                    </h3>
+                    <p className="text-gray-400">
+                      Выбери нужный кабинет слева, и дашборд загрузит статистику за текущий период.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

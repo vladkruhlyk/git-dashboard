@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Key, Loader2, ExternalLink, LogOut, ChevronDown, CalendarDays } from 'lucide-react';
+import { useState } from 'react';
+import { Key, Loader2, ExternalLink, LogOut, CalendarDays } from 'lucide-react';
 import type { AdAccount, DateRange } from '../types';
 
 interface ApiSetupProps {
@@ -59,8 +59,6 @@ export function ApiSetup({
   onDisconnect, onClearError,
 }: ApiSetupProps) {
   const [inputToken, setInputToken] = useState(token);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [accountSearch, setAccountSearch] = useState('');
   const [dateRange, setDateRange] = useState<DateRange>(() => {
     const today = new Date();
     const weekAgo = new Date(today);
@@ -77,12 +75,6 @@ export function ApiSetup({
     onClearError();
     onSaveToken(inputToken);
     await onFetchAccounts(inputToken);
-  };
-
-  const handleSelectAccount = (account: AdAccount) => {
-    setShowDropdown(false);
-    setAccountSearch('');
-    onSelectAccount(account, dateRange);
   };
 
   const applyDateRange = (newRange: DateRange) => {
@@ -112,17 +104,6 @@ export function ApiSetup({
     past.setDate(past.getDate() - days);
     applyDateRange({ since: toISO(past), until: toISO(today) });
   };
-
-  const filteredAccounts = useMemo(() => {
-    const normalizedSearch = accountSearch.trim().toLowerCase();
-    return accounts
-      .filter((account) => {
-        if (!normalizedSearch) return true;
-        const haystack = `${account.name} ${account.account_id} ${account.currency}`.toLowerCase();
-        return haystack.includes(normalizedSearch);
-      })
-      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-  }, [accounts, accountSearch]);
 
   if (!token || accounts.length === 0) {
     return (
@@ -207,49 +188,6 @@ export function ApiSetup({
               <Key className="w-5 h-5 text-white" />
             </div>
             <span className="text-white font-bold text-lg hidden sm:block">ADS</span>
-          </div>
-
-          <div className="relative">
-            <button
-              onClick={() => setShowDropdown(!showDropdown)}
-              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10 transition-all"
-            >
-              <span className="max-w-[220px] truncate">
-                {selectedAccount ? selectedAccount.name : 'Выберите кабинет'}
-              </span>
-              <ChevronDown className="w-4 h-4 text-gray-400" />
-            </button>
-            {showDropdown && (
-              <div className="absolute top-full left-0 mt-2 w-[420px] max-h-[520px] overflow-y-auto rounded-xl border border-white/10 bg-[#0d1117] shadow-2xl shadow-black/50 z-50">
-                <div className="px-3 py-2 border-b border-white/10 sticky top-0 bg-[#0d1117] z-10">
-                  <input
-                    value={accountSearch}
-                    onChange={(e) => setAccountSearch(e.target.value)}
-                    placeholder="Поиск кабинета: имя, ID, валюта"
-                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                {filteredAccounts.length === 0 && (
-                  <div className="px-4 py-6 text-sm text-gray-500 text-center">
-                    По вашему запросу кабинеты не найдены
-                  </div>
-                )}
-
-                {filteredAccounts.map((acc) => (
-                  <button
-                    key={acc.id}
-                    onClick={() => handleSelectAccount(acc)}
-                    className={`w-full text-left px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0 ${
-                      selectedAccount?.id === acc.id ? 'bg-indigo-500/10 text-indigo-400' : 'text-gray-300'
-                    }`}
-                  >
-                    <div className="font-medium text-sm">{acc.name}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">ID: {acc.account_id} · {acc.currency}</div>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="relative flex items-center gap-2">

@@ -33,12 +33,17 @@ type MetricKey =
 type BreakdownColumnKey =
   | 'spend'
   | 'impressions'
+  | 'reach'
   | 'frequency'
   | 'clicks'
   | 'ctr'
   | 'cpc'
+  | 'cpm'
+  | 'leads'
   | 'messagingConversations'
+  | 'costPerMessagingConversation'
   | 'purchases'
+  | 'costPerPurchase'
   | 'purchaseValue'
   | 'roas';
 type FunnelGoal = 'leads' | 'purchases';
@@ -129,16 +134,21 @@ const baseMetricKeys: MetricKey[] = ['spend', 'impressions', 'clicks', 'ctr', 'c
 const defaultBreakdownColumnKeys: BreakdownColumnKey[] = [
   'spend',
   'impressions',
+  'reach',
   'frequency',
   'clicks',
   'ctr',
   'cpc',
+  'cpm',
+  'leads',
   'messagingConversations',
+  'costPerMessagingConversation',
   'purchases',
+  'costPerPurchase',
   'purchaseValue',
   'roas',
 ];
-const compactBreakdownColumnKeys: BreakdownColumnKey[] = ['spend', 'impressions', 'clicks', 'ctr', 'purchases', 'roas'];
+const compactBreakdownColumnKeys: BreakdownColumnKey[] = ['spend', 'impressions', 'clicks', 'ctr', 'leads', 'purchases', 'roas'];
 
 const moveMetric = (arr: MetricKey[], source: MetricKey, target: MetricKey): MetricKey[] => {
   const sourceIdx = arr.indexOf(source);
@@ -379,12 +389,17 @@ export function Dashboard({
   const breakdownColumns = useMemo(() => ([
     { key: 'spend' as BreakdownColumnKey, label: 'Расход' },
     { key: 'impressions' as BreakdownColumnKey, label: 'Показы' },
+    { key: 'reach' as BreakdownColumnKey, label: 'Охват' },
     { key: 'frequency' as BreakdownColumnKey, label: 'Частота' },
     { key: 'clicks' as BreakdownColumnKey, label: 'Клики' },
     { key: 'ctr' as BreakdownColumnKey, label: 'CTR' },
     { key: 'cpc' as BreakdownColumnKey, label: 'CPC' },
+    { key: 'cpm' as BreakdownColumnKey, label: 'CPM' },
+    { key: 'leads' as BreakdownColumnKey, label: 'Лиды' },
     { key: 'messagingConversations' as BreakdownColumnKey, label: 'Переписки' },
+    { key: 'costPerMessagingConversation' as BreakdownColumnKey, label: 'Цена переписки' },
     { key: 'purchases' as BreakdownColumnKey, label: 'Покупки' },
+    { key: 'costPerPurchase' as BreakdownColumnKey, label: 'Цена покупки' },
     { key: 'purchaseValue' as BreakdownColumnKey, label: 'Ценность' },
     { key: 'roas' as BreakdownColumnKey, label: 'ROAS' },
   ]), []);
@@ -514,7 +529,7 @@ export function Dashboard({
   );
 
   const renderBreakdownCell = (
-    item: Pick<AdHierarchyItem, 'spend' | 'impressions' | 'frequency' | 'clicks' | 'ctr' | 'cpc' | 'messagingConversations' | 'purchases' | 'purchaseValue' | 'roas'>,
+    item: Pick<AdHierarchyItem, 'spend' | 'impressions' | 'reach' | 'frequency' | 'clicks' | 'ctr' | 'cpc' | 'cpm' | 'leads' | 'messagingConversations' | 'costPerMessagingConversation' | 'purchases' | 'costPerPurchase' | 'purchaseValue' | 'roas'>,
     columnKey: BreakdownColumnKey,
     muted = false
   ) => {
@@ -523,6 +538,8 @@ export function Dashboard({
         return renderStatCell(formatMoney(item.spend), muted);
       case 'impressions':
         return renderStatCell(formatNum(item.impressions), muted);
+      case 'reach':
+        return renderStatCell(formatNum(item.reach), muted);
       case 'frequency':
         return renderStatCell(item.frequency.toFixed(2), muted);
       case 'clicks':
@@ -531,10 +548,18 @@ export function Dashboard({
         return renderStatCell(`${item.ctr.toFixed(2)}%`, muted);
       case 'cpc':
         return renderStatCell(formatMoney(item.cpc), muted);
+      case 'cpm':
+        return renderStatCell(formatMoney(item.cpm), muted);
+      case 'leads':
+        return renderStatCell(formatNum(item.leads), muted);
       case 'messagingConversations':
         return renderStatCell(formatNum(item.messagingConversations), muted);
+      case 'costPerMessagingConversation':
+        return renderStatCell(formatMoney(item.costPerMessagingConversation), muted);
       case 'purchases':
         return renderStatCell(formatNum(item.purchases), muted);
+      case 'costPerPurchase':
+        return renderStatCell(formatMoney(item.costPerPurchase), muted);
       case 'purchaseValue':
         return renderStatCell(formatMoney(item.purchaseValue), muted);
       case 'roas':
@@ -998,12 +1023,17 @@ export function Dashboard({
                                 renderBreakdownCell({
                                   spend,
                                   impressions: parseInt(c.impressions || '0'),
+                                  reach: parseInt(c.reach || '0'),
                                   frequency: parseFloat(c.frequency || '0'),
                                   clicks: parseInt(c.clicks || '0'),
                                   ctr: parseFloat(c.ctr || '0'),
                                   cpc: parseFloat(c.cpc || '0'),
+                                  cpm: parseFloat(c.cpm || '0'),
+                                  leads: parseActions(c.actions, 'lead'),
                                   messagingConversations: messaging,
+                                  costPerMessagingConversation: messaging > 0 ? spend / messaging : 0,
                                   purchases,
+                                  costPerPurchase: purchases > 0 ? spend / purchases : 0,
                                   purchaseValue,
                                   roas,
                                 }, column.key)
@@ -1098,7 +1128,7 @@ export function Dashboard({
                   <img
                     src={creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url}
                     alt={creativePreview.name}
-                    className="h-[360px] w-full object-cover"
+                    className="h-[420px] w-full object-contain bg-[#080d14]"
                   />
                 ) : (
                   <div className="flex h-[360px] items-center justify-center text-sm text-gray-500">
@@ -1135,6 +1165,19 @@ export function Dashboard({
                     <div className="mt-2 text-sm text-gray-500">Ссылка не пришла от API.</div>
                   )}
                 </div>
+                {(creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url) && (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-gray-500">Исходное изображение</div>
+                    <a
+                      href={creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 block break-all text-sm text-indigo-300 hover:text-indigo-200"
+                    >
+                      Открыть оригинал
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
           </div>

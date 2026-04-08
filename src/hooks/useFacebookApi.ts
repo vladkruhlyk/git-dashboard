@@ -86,7 +86,10 @@ const parseCreativePreview = (creative: Record<string, unknown> | undefined): Cr
     id: creative.id as string | undefined,
     name: creative.name as string | undefined,
     thumbnail_url: creative.thumbnail_url as string | undefined,
-    image_url: (creative.image_url as string | undefined) || (linkData?.image_hash as string | undefined),
+    image_url: (creative.image_url as string | undefined)
+      || (linkData?.picture as string | undefined)
+      || (videoData?.image_url as string | undefined)
+      || (creative.thumbnail_url as string | undefined),
     video_id: creative.video_id as string | undefined,
     body: (creative.body as string | undefined)
       || (linkData?.message as string | undefined)
@@ -345,7 +348,7 @@ export function useFacebookApi() {
       if (adsData.error) throw new Error(adsData.error.message);
 
       const creativesRes = await fetch(
-        `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,creative{id,name,thumbnail_url,image_url,video_id,body,title,link_url,object_story_spec}&limit=500&access_token=${token}`
+        `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,creative{id,name,thumbnail_url,image_url,video_id,body,title,link_url,object_story_spec{link_data{picture,link,name,message},video_data{image_url,video_id,message,title,call_to_action}}}&limit=500&access_token=${token}`
       );
       const creativesData = await creativesRes.json();
       if (creativesData.error) throw new Error(creativesData.error.message);
