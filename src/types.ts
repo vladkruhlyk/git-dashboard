@@ -9,6 +9,8 @@ export interface AdAccount {
 export interface CampaignInsight {
   campaign_name: string;
   campaign_id: string;
+  effective_status?: string;
+  configured_status?: string;
   spend: string;
   impressions: string;
   reach: string;
@@ -48,6 +50,8 @@ export interface AdHierarchyItem {
   id: string;
   name: string;
   level: 'campaign' | 'adset' | 'ad';
+  effective_status?: string;
+  configured_status?: string;
   spend: number;
   impressions: number;
   reach: number;

@@ -72,6 +72,25 @@ function formatMoney(n: number): string {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function normalizeStatus(status?: string): string | null {
+  if (!status) return null;
+  return status.replace(/_/g, ' ').toLowerCase();
+}
+
+function getStatusTone(status?: string): string {
+  switch (status) {
+    case 'ACTIVE':
+      return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300';
+    case 'PAUSED':
+      return 'border-amber-500/20 bg-amber-500/10 text-amber-300';
+    case 'ARCHIVED':
+    case 'DELETED':
+      return 'border-rose-500/20 bg-rose-500/10 text-rose-300';
+    default:
+      return 'border-white/10 bg-white/5 text-gray-300';
+  }
+}
+
 const parseActions = (actions: Array<{ action_type: string; value: string }> | undefined, type: string): number => {
   if (!actions) return 0;
   const found = actions.find(a => a.action_type === type);
@@ -557,6 +576,29 @@ export function Dashboard({
     <span className={muted ? 'text-gray-500' : 'text-gray-300'}>{value}</span>
   );
 
+  const renderStatusBadges = (item: Pick<AdHierarchyItem, 'effective_status' | 'configured_status'> | Pick<CampaignInsight, 'effective_status' | 'configured_status'>) => {
+    const effective = item.effective_status;
+    const configured = item.configured_status;
+    const showConfigured = configured && configured !== effective;
+
+    if (!effective && !showConfigured) return null;
+
+    return (
+      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        {effective && (
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${getStatusTone(effective)}`}>
+            {normalizeStatus(effective)}
+          </span>
+        )}
+        {showConfigured && (
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${getStatusTone(configured)}`}>
+            set: {normalizeStatus(configured)}
+          </span>
+        )}
+      </div>
+    );
+  };
+
   const renderBreakdownCell = (
     item: Pick<AdHierarchyItem, 'spend' | 'impressions' | 'reach' | 'frequency' | 'clicks' | 'ctr' | 'cpc' | 'cpm' | 'leads' | 'messagingConversations' | 'costPerMessagingConversation' | 'purchases' | 'costPerPurchase' | 'purchaseValue' | 'roas'>,
     columnKey: BreakdownColumnKey,
@@ -1029,9 +1071,12 @@ export function Dashboard({
                                 {isSelected && (
                                   <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse shrink-0" />
                                 )}
-                                <span className={`font-medium truncate ${isSelected ? 'text-indigo-300' : 'text-white'}`}>
-                                  {c.campaign_name}
-                                </span>
+                                <div className="min-w-0">
+                                  <span className={`block truncate font-medium ${isSelected ? 'text-indigo-300' : 'text-white'}`}>
+                                    {c.campaign_name}
+                                  </span>
+                                  {renderStatusBadges(c)}
+                                </div>
                               </div>
                             </button>
                           </div>
@@ -1084,7 +1129,10 @@ export function Dashboard({
                                   >
                                     <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isAdsetExpanded ? 'rotate-90' : ''}`} />
                                   </button>
-                                  <span className="truncate text-sm text-gray-200">{adset.name}</span>
+                                  <div className="min-w-0">
+                                    <span className="block truncate text-sm text-gray-200">{adset.name}</span>
+                                    {renderStatusBadges(adset)}
+                                  </div>
                                 </div>
                               </td>
                               {breakdownColumns
@@ -1099,7 +1147,10 @@ export function Dashboard({
                               <tr key={ad.id} className="border-b border-white/[0.04] bg-[#0a0f16]">
                                 <td className="px-6 py-3">
                                   <div className="flex items-center justify-between gap-3 pl-16">
-                                    <span className="truncate text-sm text-gray-300">{ad.name}</span>
+                                    <div className="min-w-0">
+                                      <span className="block truncate text-sm text-gray-300">{ad.name}</span>
+                                      {renderStatusBadges(ad)}
+                                    </div>
                                     <button
                                       onClick={() => void handleOpenCreative(ad)}
                                       className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10"
@@ -1134,7 +1185,7 @@ export function Dashboard({
       {creativePreview && (
         <>
           <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm" onClick={() => setCreativePreview(null)} />
-          <div className="fixed inset-x-4 top-1/2 z-[80] mx-auto w-full max-w-6xl -translate-y-1/2 rounded-[28px] border border-white/10 bg-[#0d1117] p-6 shadow-2xl shadow-black/70">
+          <div className="fixed inset-x-4 top-1/2 z-[80] mx-auto w-full max-w-6xl -translate-y-1/2 overflow-hidden rounded-[28px] border border-white/10 bg-[#0d1117] p-6 shadow-2xl shadow-black/70">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 text-sm text-indigo-300">
@@ -1152,7 +1203,7 @@ export function Dashboard({
             </div>
 
             <div className="grid gap-6 md:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-              <div className="flex min-h-[320px] max-h-[72vh] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[#080d14] p-4">
+              <div className="flex min-h-[320px] max-h-[72vh] min-w-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[#080d14] p-4">
                 {creativePreview.creative?.media_type === 'video' && creativePreview.creative?.video_source ? (
                   <video
                     src={creativePreview.creative.video_source}
@@ -1160,14 +1211,24 @@ export function Dashboard({
                     playsInline
                     preload="metadata"
                     poster={creativePreview.creative.thumbnail_url || creativePreview.creative.image_url}
-                    className="max-h-[calc(72vh-2rem)] w-auto max-w-full rounded-xl bg-[#080d14] object-contain"
+                    className="block max-h-[calc(72vh-2rem)] w-auto max-w-full overflow-hidden rounded-xl bg-[#080d14] object-contain"
                   />
                 ) : creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url ? (
                   <img
                     src={creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url}
                     alt={creativePreview.name}
-                    className="max-h-[calc(72vh-2rem)] w-auto max-w-full rounded-xl object-contain"
+                    className="block max-h-[calc(72vh-2rem)] w-auto max-w-full rounded-xl object-contain"
                   />
+                ) : creativePreview.creative?.preview_html ? (
+                  <div className="h-[72vh] w-full overflow-hidden rounded-xl bg-white">
+                    <iframe
+                      title={`preview-${creativePreview.id}`}
+                      srcDoc={`<!doctype html><html><head><style>html,body{margin:0;padding:0;overflow:hidden;max-width:100%;background:#fff}*{box-sizing:border-box;max-width:100%}::-webkit-scrollbar{display:none}</style></head><body>${creativePreview.creative.preview_html}</body></html>`}
+                      sandbox="allow-same-origin allow-scripts allow-popups"
+                      className="block h-full w-full overflow-hidden border-0"
+                      scrolling="no"
+                    />
+                  </div>
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-sm text-gray-500">
                     {isPreviewLoading
