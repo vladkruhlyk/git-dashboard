@@ -108,6 +108,10 @@ function isActiveEntity(status?: string, configuredStatus?: string): boolean {
   return status === 'ACTIVE' || configuredStatus === 'ACTIVE';
 }
 
+function hasEditableBudget(item: Pick<CampaignInsight, 'daily_budget' | 'lifetime_budget'> | Pick<AdHierarchyItem, 'daily_budget' | 'lifetime_budget'>): boolean {
+  return Boolean(item.daily_budget || item.lifetime_budget);
+}
+
 const parseActions = (actions: Array<{ action_type: string; value: string }> | undefined, type: string): number => {
   if (!actions) return 0;
   const found = actions.find(a => a.action_type === type);
@@ -1003,12 +1007,14 @@ export function Dashboard({
                               >
                                 {entityActionId === c.campaign_id ? '...' : isActiveEntity(c.effective_status, c.configured_status) ? 'Выкл' : 'Вкл'}
                               </button>
-                              <button
-                                onClick={() => void handleBudgetChange({ id: c.campaign_id, level: 'campaign', daily_budget: c.daily_budget, lifetime_budget: c.lifetime_budget })}
-                                className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
-                              >
-                                Бюджет
-                              </button>
+                              {hasEditableBudget(c) && (
+                                <button
+                                  onClick={() => void handleBudgetChange({ id: c.campaign_id, level: 'campaign', daily_budget: c.daily_budget, lifetime_budget: c.lifetime_budget })}
+                                  className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
+                                >
+                                  Бюджет
+                                </button>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -1083,12 +1089,14 @@ export function Dashboard({
                                     >
                                       {entityActionId === adset.id ? '...' : isActiveEntity(adset.effective_status, adset.configured_status) ? 'Выкл' : 'Вкл'}
                                     </button>
-                                    <button
-                                      onClick={() => void handleBudgetChange(adset)}
-                                      className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
-                                    >
-                                      Бюджет
-                                    </button>
+                                    {hasEditableBudget(adset) && (
+                                      <button
+                                        onClick={() => void handleBudgetChange(adset)}
+                                        className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
+                                      >
+                                        Бюджет
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               </td>
