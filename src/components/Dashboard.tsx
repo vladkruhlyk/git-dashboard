@@ -167,6 +167,8 @@ export function Dashboard({
   selectedCampaignId, onSelectCampaign, onClearCampaign,
   campaignNodesById, loadingCampaignTreeId, onLoadCampaignTree, onLoadAdPreview,
 }: DashboardProps) {
+  const PREVIEW_BASE_WIDTH = 400;
+  const PREVIEW_BASE_HEIGHT = 820;
   const [chartMetric, setChartMetric] = useState<ChartMetricKey>('purchases');
   const [showChartDropdown, setShowChartDropdown] = useState(false);
   const [showFunnelGoalDropdown, setShowFunnelGoalDropdown] = useState(false);
@@ -184,6 +186,7 @@ export function Dashboard({
   const [expandedAdsetIds, setExpandedAdsetIds] = useState<string[]>([]);
   const [creativePreview, setCreativePreview] = useState<AdHierarchyItem | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [creativePreviewScale, setCreativePreviewScale] = useState(1);
   const [visibleMetricKeys, setVisibleMetricKeys] = useState<MetricKey[]>(() => {
     try {
       const raw = localStorage.getItem(METRICS_STORAGE_KEY);
@@ -220,6 +223,7 @@ export function Dashboard({
   });
   const [exportError, setExportError] = useState<string | null>(null);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const creativePreviewViewportRef = useRef<HTMLDivElement>(null);
 
   const activeChartOption = chartOptions.find(o => o.value === chartMetric) || chartOptions[0];
 
@@ -256,6 +260,25 @@ export function Dashboard({
       }
     }
   }, [campaignNodesById, creativePreview]);
+
+  useEffect(() => {
+    if (!creativePreview?.creative?.preview_html) return;
+
+    const element = creativePreviewViewportRef.current;
+    if (!element) return;
+
+    const updateScale = () => {
+      const nextScale = Math.min(element.clientWidth / PREVIEW_BASE_WIDTH, 1);
+      setCreativePreviewScale(nextScale > 0 ? nextScale : 1);
+    };
+
+    updateScale();
+
+    const observer = new ResizeObserver(() => updateScale());
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, [creativePreview]);
 
   const metrics = [
     {
@@ -1152,14 +1175,28 @@ export function Dashboard({
             </div>
 
             <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
-              <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+              <div
+                ref={creativePreviewViewportRef}
+                className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]"
+              >
                 {creativePreview.creative?.preview_html ? (
-                  <iframe
-                    title={`preview-${creativePreview.id}`}
-                    srcDoc={creativePreview.creative.preview_html}
-                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-                    className="h-[520px] w-full bg-white"
-                  />
+                  <div
+                    className="relative mx-auto overflow-hidden bg-[#080d14]"
+                    style={{ height: `${PREVIEW_BASE_HEIGHT * creativePreviewScale}px` }}
+                  >
+                    <iframe
+                      title={`preview-${creativePreview.id}`}
+                      srcDoc={creativePreview.creative.preview_html}
+                      sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                      className="absolute left-1/2 top-0 border-0 bg-white"
+                      style={{
+                        width: `${PREVIEW_BASE_WIDTH}px`,
+                        height: `${PREVIEW_BASE_HEIGHT}px`,
+                        transform: `translateX(-50%) scale(${creativePreviewScale})`,
+                        transformOrigin: 'top center',
+                      }}
+                    />
+                  </div>
                 ) : creativePreview.creative?.media_type === 'video' && creativePreview.creative?.video_source ? (
                   <video
                     src={creativePreview.creative.video_source}
