@@ -7,6 +7,7 @@ import { useFacebookApi } from './hooks/useFacebookApi';
 
 const VISIBLE_ACCOUNTS_STORAGE_KEY = 'dashboard_visible_accounts';
 const ACCOUNT_ALIASES_STORAGE_KEY = 'dashboard_account_aliases';
+const ACCOUNT_ORDER_STORAGE_KEY = 'dashboard_account_order';
 
 function parseMoneyLike(value: string | undefined): number | null {
   if (!value) return null;
@@ -80,6 +81,16 @@ export function App() {
       return {};
     }
   });
+  const [accountOrder, setAccountOrder] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(ACCOUNT_ORDER_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
   const [visibleAccountIds, setVisibleAccountIds] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem(VISIBLE_ACCOUNTS_STORAGE_KEY);
@@ -90,6 +101,7 @@ export function App() {
       return [];
     }
   });
+  const [draggingAccountId, setDraggingAccountId] = useState<string | null>(null);
 
   // Auto-fetch accounts if token exists on load
   useEffect(() => {
@@ -114,13 +126,35 @@ export function App() {
     localStorage.setItem(ACCOUNT_ALIASES_STORAGE_KEY, JSON.stringify(accountAliases));
   }, [accountAliases]);
 
+  useEffect(() => {
+    localStorage.setItem(ACCOUNT_ORDER_STORAGE_KEY, JSON.stringify(accountOrder));
+  }, [accountOrder]);
+
+  useEffect(() => {
+    if (accounts.length === 0) return;
+    setAccountOrder((prev) => {
+      const knownIds = new Set(accounts.map((account) => account.id));
+      const preserved = prev.filter((id) => knownIds.has(id));
+      const missing = accounts.map((account) => account.id).filter((id) => !preserved.includes(id));
+      return [...preserved, ...missing];
+    });
+  }, [accounts]);
+
   const getAccountLabel = (accountId: string, fallbackName: string) => accountAliases[accountId]?.trim() || fallbackName;
 
   const visibleAccounts = useMemo(() => {
-    if (visibleAccountIds.length === 0) return accounts;
-    const visible = accounts.filter((account) => visibleAccountIds.includes(account.id));
+    const orderedAccounts = (accountOrder.length > 0 ? [...accounts].sort((a, b) => {
+      const aIndex = accountOrder.indexOf(a.id);
+      const bIndex = accountOrder.indexOf(b.id);
+      const safeA = aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex;
+      const safeB = bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex;
+      return safeA - safeB;
+    }) : accounts);
+
+    if (visibleAccountIds.length === 0) return orderedAccounts;
+    const visible = orderedAccounts.filter((account) => visibleAccountIds.includes(account.id));
     return visible.length > 0 ? visible : accounts;
-  }, [accounts, visibleAccountIds]);
+  }, [accounts, accountOrder, visibleAccountIds]);
 
   const filteredAccountSettings = useMemo(() => {
     const normalized = accountSettingsSearch.trim().toLowerCase();
@@ -152,6 +186,19 @@ export function App() {
         return next;
       }
       return { ...prev, [accountId]: trimmed };
+    });
+  };
+
+  const moveAccount = (sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return;
+    setAccountOrder((prev) => {
+      const next = prev.length > 0 ? [...prev] : accounts.map((account) => account.id);
+      const sourceIndex = next.indexOf(sourceId);
+      const targetIndex = next.indexOf(targetId);
+      if (sourceIndex === -1 || targetIndex === -1) return prev;
+      next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, sourceId);
+      return next;
     });
   };
 
@@ -265,11 +312,19 @@ export function App() {
                   return (
                     <div
                       key={account.id}
-                      className={`mb-2 rounded-2xl border px-4 py-4 transition-all ${
+                      draggable
+                      onDragStart={() => setDraggingAccountId(account.id)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={() => {
+                        if (draggingAccountId) moveAccount(draggingAccountId, account.id);
+                        setDraggingAccountId(null);
+                      }}
+                      onDragEnd={() => setDraggingAccountId(null)}
+                      className={`mb-2 rounded-2xl border px-4 py-4 transition-all duration-200 ${
                         isActive
                           ? 'border-indigo-500/30 bg-indigo-500/12 shadow-lg shadow-indigo-500/10'
                           : 'border-white/5 bg-white/[0.03] hover:bg-white/[0.05]'
-                      }`}
+                      } ${draggingAccountId === account.id ? 'scale-[0.985] opacity-60' : ''} ${draggingAccountId && draggingAccountId !== account.id ? 'hover:-translate-y-1' : ''}`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <button

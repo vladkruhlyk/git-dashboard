@@ -68,8 +68,17 @@ function formatNum(n: number, decimals = 0): string {
   return n.toFixed(decimals);
 }
 
-function formatMoney(n: number): string {
-  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function formatMoney(n: number, currency = 'USD'): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return `${n.toFixed(2)} ${currency}`;
+  }
 }
 
 function normalizeStatus(status?: string): string | null {
@@ -280,7 +289,7 @@ export function Dashboard({
     {
       key: 'spend' as MetricKey,
       title: 'Расход',
-      value: formatMoney(insights.spend),
+      value: formatMoney(insights.spend, account.currency),
       icon: <DollarSign className="w-5 h-5 text-emerald-400" />,
       color: 'bg-emerald-500/20',
       glowColor: '#10b981',
@@ -328,7 +337,7 @@ export function Dashboard({
     {
       key: 'cpc' as MetricKey,
       title: 'CPC',
-      value: formatMoney(insights.cpc),
+      value: formatMoney(insights.cpc, account.currency),
       icon: <Zap className="w-5 h-5 text-yellow-400" />,
       color: 'bg-yellow-500/20',
       glowColor: '#eab308',
@@ -336,7 +345,7 @@ export function Dashboard({
     {
       key: 'cpm' as MetricKey,
       title: 'CPM',
-      value: formatMoney(insights.cpm),
+      value: formatMoney(insights.cpm, account.currency),
       icon: <Layers className="w-5 h-5 text-pink-400" />,
       color: 'bg-pink-500/20',
       glowColor: '#ec4899',
@@ -352,7 +361,7 @@ export function Dashboard({
     {
       key: 'costPerMessagingConversation' as MetricKey,
       title: 'Цена начала переписки',
-      value: formatMoney(insights.costPerMessagingConversation),
+      value: formatMoney(insights.costPerMessagingConversation, account.currency),
       icon: <DollarSign className="w-5 h-5 text-rose-400" />,
       color: 'bg-rose-500/20',
       glowColor: '#f43f5e',
@@ -368,7 +377,7 @@ export function Dashboard({
     {
       key: 'purchaseValue' as MetricKey,
       title: 'Ценность покупок',
-      value: formatMoney(insights.purchaseValue),
+      value: formatMoney(insights.purchaseValue, account.currency),
       icon: <BarChart3 className="w-5 h-5 text-fuchsia-400" />,
       color: 'bg-fuchsia-500/20',
       glowColor: '#d946ef',
@@ -385,7 +394,7 @@ export function Dashboard({
     {
       key: 'costPerPurchase' as MetricKey,
       title: 'Цена за покупку',
-      value: formatMoney(insights.costPerPurchase),
+      value: formatMoney(insights.costPerPurchase, account.currency),
       icon: <DollarSign className="w-5 h-5 text-red-400" />,
       color: 'bg-red-500/20',
       glowColor: '#ef4444',
@@ -606,7 +615,7 @@ export function Dashboard({
   ) => {
     switch (columnKey) {
       case 'spend':
-        return renderStatCell(formatMoney(item.spend), muted);
+        return renderStatCell(formatMoney(item.spend, account.currency), muted);
       case 'impressions':
         return renderStatCell(formatNum(item.impressions), muted);
       case 'reach':
@@ -618,21 +627,21 @@ export function Dashboard({
       case 'ctr':
         return renderStatCell(`${item.ctr.toFixed(2)}%`, muted);
       case 'cpc':
-        return renderStatCell(formatMoney(item.cpc), muted);
+        return renderStatCell(formatMoney(item.cpc, account.currency), muted);
       case 'cpm':
-        return renderStatCell(formatMoney(item.cpm), muted);
+        return renderStatCell(formatMoney(item.cpm, account.currency), muted);
       case 'leads':
         return renderStatCell(formatNum(item.leads), muted);
       case 'messagingConversations':
         return renderStatCell(formatNum(item.messagingConversations), muted);
       case 'costPerMessagingConversation':
-        return renderStatCell(formatMoney(item.costPerMessagingConversation), muted);
+        return renderStatCell(formatMoney(item.costPerMessagingConversation, account.currency), muted);
       case 'purchases':
         return renderStatCell(formatNum(item.purchases), muted);
       case 'costPerPurchase':
-        return renderStatCell(formatMoney(item.costPerPurchase), muted);
+        return renderStatCell(formatMoney(item.costPerPurchase, account.currency), muted);
       case 'purchaseValue':
-        return renderStatCell(formatMoney(item.purchaseValue), muted);
+        return renderStatCell(formatMoney(item.purchaseValue, account.currency), muted);
       case 'roas':
         return renderStatCell(`${item.roas.toFixed(2)}x`, muted);
     }
@@ -763,109 +772,6 @@ export function Dashboard({
           </div>
         ))}
       </div>
-
-      {dailyData.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Расход по дням</h3>
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={dailyData}>
-                <defs>
-                  <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Area type="monotone" dataKey="spend" stroke="#6366f1" fill="url(#spendGrad)" strokeWidth={2} name="Расход" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">
-                {activeChartOption.chartLabel} по дням
-              </h3>
-              <div className="relative" data-export-ignore="true">
-                <button
-                  onClick={() => setShowChartDropdown(!showChartDropdown)}
-                  className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-gray-300 hover:bg-white/10 hover:border-white/20 transition-all"
-                >
-                  <span>{activeChartOption.chartLabel}</span>
-                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showChartDropdown ? 'rotate-180' : ''}`} />
-                </button>
-                {showChartDropdown && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowChartDropdown(false)} />
-                    <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-[#0d1117] shadow-2xl shadow-black/60 z-50 overflow-hidden">
-                      {chartOptions.map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => {
-                            setChartMetric(opt.value);
-                            setShowChartDropdown(false);
-                          }}
-                          className={`w-full text-left px-4 py-3 text-sm transition-colors flex items-center gap-3 ${
-                            chartMetric === opt.value
-                              ? 'bg-indigo-500/10 text-indigo-400'
-                              : 'text-gray-400 hover:bg-white/5 hover:text-white'
-                          }`}
-                        >
-                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: opt.color }} />
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={dailyData}>
-                <defs>
-                  <linearGradient id="dynamicBarGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={activeChartOption.color} stopOpacity={0.9} />
-                    <stop offset="100%" stopColor={activeChartOption.color} stopOpacity={0.3} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey={chartMetric} fill="url(#dynamicBarGrad)" radius={[4, 4, 0, 0]} name={activeChartOption.chartLabel} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6 lg:col-span-2">
-            <h3 className="text-lg font-semibold text-white mb-4">Расход vs Выручка</h3>
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={dailyData}>
-                <defs>
-                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="spendGrad2" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ef4444" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Area type="monotone" dataKey="revenue" stroke="#10b981" fill="url(#revGrad)" strokeWidth={2} name="Выручка" />
-                <Area type="monotone" dataKey="spend" stroke="#ef4444" fill="url(#spendGrad2)" strokeWidth={2} name="Расход" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
 
       {campaigns.length > 0 && (
         <div className="overflow-visible rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl">
@@ -1107,6 +1013,109 @@ export function Dashboard({
             </table>
           </div>
           )}
+        </div>
+      )}
+
+      {dailyData.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Расход по дням</h3>
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={dailyData}>
+                <defs>
+                  <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Area type="monotone" dataKey="spend" stroke="#6366f1" fill="url(#spendGrad)" strokeWidth={2} name="Расход" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">
+                {activeChartOption.chartLabel} по дням
+              </h3>
+              <div className="relative" data-export-ignore="true">
+                <button
+                  onClick={() => setShowChartDropdown(!showChartDropdown)}
+                  className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-gray-300 hover:bg-white/10 hover:border-white/20 transition-all"
+                >
+                  <span>{activeChartOption.chartLabel}</span>
+                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showChartDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showChartDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowChartDropdown(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-[#0d1117] shadow-2xl shadow-black/60 z-50 overflow-hidden">
+                      {chartOptions.map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            setChartMetric(opt.value);
+                            setShowChartDropdown(false);
+                          }}
+                          className={`w-full text-left px-4 py-3 text-sm transition-colors flex items-center gap-3 ${
+                            chartMetric === opt.value
+                              ? 'bg-indigo-500/10 text-indigo-400'
+                              : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                          }`}
+                        >
+                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: opt.color }} />
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={dailyData}>
+                <defs>
+                  <linearGradient id="dynamicBarGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={activeChartOption.color} stopOpacity={0.9} />
+                    <stop offset="100%" stopColor={activeChartOption.color} stopOpacity={0.3} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Bar dataKey={chartMetric} fill="url(#dynamicBarGrad)" radius={[4, 4, 0, 0]} name={activeChartOption.chartLabel} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6 lg:col-span-2">
+            <h3 className="text-lg font-semibold text-white mb-4">Расход vs Выручка</h3>
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={dailyData}>
+                <defs>
+                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="spendGrad2" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#ef4444" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#1e293b' }} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Area type="monotone" dataKey="revenue" stroke="#10b981" fill="url(#revGrad)" strokeWidth={2} name="Выручка" />
+                <Area type="monotone" dataKey="spend" stroke="#ef4444" fill="url(#spendGrad2)" strokeWidth={2} name="Расход" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
 
