@@ -73,6 +73,14 @@ const campaignFilter = (campaignId: string) =>
 const withTimeRange = (dateRange: DateRange) =>
   `time_range=${encodeURIComponent(JSON.stringify({ since: dateRange.since, until: dateRange.until }))}`;
 
+const chunkArray = <T,>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+};
+
 const parseCreativePreview = (creative: Record<string, unknown> | undefined): CreativePreview | null => {
   if (!creative) return null;
 
@@ -218,6 +226,21 @@ export function useFacebookApi() {
   const saveToken = useCallback((t: string) => {
     setToken(t);
     localStorage.setItem('fb_token', t);
+  }, []);
+
+  const fetchAllPages = useCallback(async (initialUrl: string) => {
+    const rows: Array<Record<string, unknown>> = [];
+    let nextUrl: string | null = initialUrl;
+
+    while (nextUrl) {
+      const res = await fetch(nextUrl);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      rows.push(...((data.data || []) as Array<Record<string, unknown>>));
+      nextUrl = (data.paging?.next as string | undefined) || null;
+    }
+
+    return rows;
   }, []);
 
   const fetchAccounts = useCallback(async (accessToken?: string) => {
@@ -434,20 +457,17 @@ export function useFacebookApi() {
       const adsetsData = await adsetsRes.json();
       if (adsetsData.error) throw new Error(adsetsData.error.message);
 
-      const adsetsMetaRes = await fetch(
-        `${FB_API_BASE}/${campaign.campaign_id}/adsets?fields=id,effective_status,status&limit=500&access_token=${token}`
-      );
-      const adsetsMetaData = await adsetsMetaRes.json();
       const adsetStatusById = new Map<string, { effective_status?: string; configured_status?: string }>();
-      if (!adsetsMetaData.error) {
-        for (const adsetRow of (adsetsMetaData.data || []) as Array<Record<string, unknown>>) {
-          const id = adsetRow.id as string | undefined;
-          if (!id) continue;
-          adsetStatusById.set(id, {
-            effective_status: adsetRow.effective_status as string | undefined,
-            configured_status: adsetRow.status as string | undefined,
-          });
-        }
+      const adsetsMetaRows = await fetchAllPages(
+        `${FB_API_BASE}/${campaign.campaign_id}/adsets?fields=id,effective_status,status&limit=100&access_token=${token}`
+      );
+      for (const adsetRow of adsetsMetaRows) {
+        const id = adsetRow.id as string | undefined;
+        if (!id) continue;
+        adsetStatusById.set(id, {
+          effective_status: adsetRow.effective_status as string | undefined,
+          configured_status: adsetRow.status as string | undefined,
+        });
       }
 
       const adsRes = await fetch(
@@ -456,14 +476,12 @@ export function useFacebookApi() {
       const adsData = await adsRes.json();
       if (adsData.error) throw new Error(adsData.error.message);
 
-      const creativesRes = await fetch(
-        `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,effective_status,status,creative{id,name,thumbnail_url,image_url,image_hash,video_id,body,title,link_url,object_story_spec{link_data{picture,image_hash,link,name,message},photo_data{image_hash,url},video_data{image_url,video_id,message,title,call_to_action}}}&limit=500&access_token=${token}`
+      const creativeRows = await fetchAllPages(
+        `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,effective_status,status,creative{id,name,thumbnail_url,image_url,image_hash,video_id,body,title,link_url,object_story_spec{link_data{picture,image_hash,link,name,message},photo_data{image_hash,url},video_data{image_url,video_id,message,title,call_to_action}}}&limit=100&access_token=${token}`
       );
-      const creativesData = await creativesRes.json();
-      if (creativesData.error) throw new Error(creativesData.error.message);
 
       const creativeByAdId = new Map<string, CreativePreview | null>();
-      for (const ad of (creativesData.data || []) as Array<Record<string, unknown>>) {
+      for (const ad of creativeRows) {
         creativeByAdId.set(ad.id as string, parseCreativePreview(ad.creative as Record<string, unknown> | undefined));
       }
 
@@ -480,16 +498,18 @@ export function useFacebookApi() {
 
       const imageUrlByHash = new Map<string, string>();
       if (imageHashes.length > 0) {
-        const hashesParam = encodeURIComponent(JSON.stringify(imageHashes));
-        const adImagesRes = await fetch(
-          `${FB_API_BASE}/${selectedAccount.id}/adimages?fields=hash,url,original_width,original_height&hashes=${hashesParam}&access_token=${token}`
-        );
-        const adImagesData = await adImagesRes.json();
-        if (!adImagesData.error && adImagesData.images) {
-          for (const value of Object.values(adImagesData.images as Record<string, Record<string, unknown>>)) {
-            const hash = value.hash as string | undefined;
-            const url = value.url as string | undefined;
-            if (hash && url) imageUrlByHash.set(hash, url);
+        for (const hashChunk of chunkArray(imageHashes, 20)) {
+          const hashesParam = encodeURIComponent(JSON.stringify(hashChunk));
+          const adImagesRes = await fetch(
+            `${FB_API_BASE}/${selectedAccount.id}/adimages?fields=hash,url,original_width,original_height&hashes=${hashesParam}&access_token=${token}`
+          );
+          const adImagesData = await adImagesRes.json();
+          if (!adImagesData.error && adImagesData.images) {
+            for (const value of Object.values(adImagesData.images as Record<string, Record<string, unknown>>)) {
+              const hash = value.hash as string | undefined;
+              const url = value.url as string | undefined;
+              if (hash && url) imageUrlByHash.set(hash, url);
+            }
           }
         }
       }
@@ -503,22 +523,24 @@ export function useFacebookApi() {
       }
 
       if (videoIds.length > 0) {
-        const videoBatchRes = await fetch(
-          `${FB_API_BASE}/?ids=${encodeURIComponent(videoIds.join(','))}&fields=source,picture,thumbnails&access_token=${token}`
-        );
-        const videoBatchData = await videoBatchRes.json();
-        if (!videoBatchData.error) {
-          for (const [videoId, payload] of Object.entries(videoBatchData as Record<string, Record<string, unknown>>)) {
-            for (const creative of creativeByAdId.values()) {
-              if (creative?.video_id !== videoId) continue;
-              const thumbnails = payload.thumbnails as { data?: Array<Record<string, unknown>> } | undefined;
-              const bestThumbnail = thumbnails?.data?.[0]?.uri as string | undefined;
-              creative.video_source = payload.source as string | undefined;
-              creative.thumbnail_url = (payload.picture as string | undefined) || bestThumbnail || creative.thumbnail_url;
-              if (!creative.image_url) {
-                creative.image_url = creative.thumbnail_url;
+        for (const videoChunk of chunkArray(videoIds, 20)) {
+          const videoBatchRes = await fetch(
+            `${FB_API_BASE}/?ids=${encodeURIComponent(videoChunk.join(','))}&fields=source,picture,thumbnails&access_token=${token}`
+          );
+          const videoBatchData = await videoBatchRes.json();
+          if (!videoBatchData.error) {
+            for (const [videoId, payload] of Object.entries(videoBatchData as Record<string, Record<string, unknown>>)) {
+              for (const creative of creativeByAdId.values()) {
+                if (creative?.video_id !== videoId) continue;
+                const thumbnails = payload.thumbnails as { data?: Array<Record<string, unknown>> } | undefined;
+                const bestThumbnail = thumbnails?.data?.[0]?.uri as string | undefined;
+                creative.video_source = payload.source as string | undefined;
+                creative.thumbnail_url = (payload.picture as string | undefined) || bestThumbnail || creative.thumbnail_url;
+                if (!creative.image_url) {
+                  creative.image_url = creative.thumbnail_url;
+                }
+                creative.media_type = creative.video_source ? 'video' : 'image';
               }
-              creative.media_type = creative.video_source ? 'video' : 'image';
             }
           }
         }
@@ -528,7 +550,7 @@ export function useFacebookApi() {
       for (const row of (adsData.data || []) as Array<Record<string, unknown>>) {
         const adsetId = row.adset_id as string | undefined;
         if (!adsetId) continue;
-        const creativeMeta = (creativesData.data || []).find(
+        const creativeMeta = creativeRows.find(
           (creativeRow: Record<string, unknown>) => (creativeRow.id as string | undefined) === ((row.ad_id as string) || '')
         ) as Record<string, unknown> | undefined;
         const item = toHierarchyItem(
@@ -567,7 +589,7 @@ export function useFacebookApi() {
     } finally {
       setLoadingCampaignTreeId(null);
     }
-  }, [token, selectedAccount, campaignNodesById, lastDateRange]);
+  }, [token, selectedAccount, campaignNodesById, lastDateRange, fetchAllPages]);
 
   const disconnect = useCallback(() => {
     setToken('');
