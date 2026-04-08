@@ -193,7 +193,7 @@ export function App() {
 
         {accounts.length > 0 && (
           <div className="mx-auto flex max-w-[1800px] gap-6 px-4 py-6 md:px-6">
-            <aside className="sticky top-24 hidden h-[calc(100vh-8rem)] w-80 shrink-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#0b1018]/85 backdrop-blur-xl lg:block">
+            <aside className="sticky top-24 hidden h-[calc(100vh-8rem)] w-80 shrink-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#0b1018]/85 backdrop-blur-xl lg:flex lg:flex-col">
               <div className="border-b border-white/5 px-5 py-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -257,7 +257,7 @@ export function App() {
                 </div>
               )}
 
-              <div className="h-[calc(100%-5.5rem)] overflow-y-auto px-3 py-3">
+              <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
                 {visibleAccounts.map((account) => {
                   const isActive = selectedAccount?.id === account.id;
                   const balance = parseMoneyLike(account.balance);
