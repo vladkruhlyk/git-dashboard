@@ -79,6 +79,7 @@ const parseCreativePreview = (creative: Record<string, unknown> | undefined): Cr
   const objectStorySpec = creative.object_story_spec as Record<string, unknown> | undefined;
   const linkData = objectStorySpec?.link_data as Record<string, unknown> | undefined;
   const videoData = objectStorySpec?.video_data as Record<string, unknown> | undefined;
+  const photoData = objectStorySpec?.photo_data as Record<string, unknown> | undefined;
   const videoCallToAction = videoData?.call_to_action as Record<string, unknown> | undefined;
   const videoCallToActionValue = videoCallToAction?.value as Record<string, unknown> | undefined;
 
@@ -87,20 +88,25 @@ const parseCreativePreview = (creative: Record<string, unknown> | undefined): Cr
     (creative.image_url as string | undefined)
     || (linkData?.picture as string | undefined)
     || (videoData?.image_url as string | undefined)
+    || (photoData?.url as string | undefined)
     || (creative.thumbnail_url as string | undefined)
     || (creative.image_hash as string | undefined)
     || (linkData?.image_hash as string | undefined)
+    || (photoData?.image_hash as string | undefined)
   );
 
   return {
     id: creative.id as string | undefined,
     name: creative.name as string | undefined,
     thumbnail_url: creative.thumbnail_url as string | undefined,
-    image_hash: (creative.image_hash as string | undefined) || (linkData?.image_hash as string | undefined),
+    image_hash: (creative.image_hash as string | undefined)
+      || (linkData?.image_hash as string | undefined)
+      || (photoData?.image_hash as string | undefined),
     media_type: hasVideo ? 'video' : hasImage ? 'image' : 'unknown',
     image_url: (creative.image_url as string | undefined)
       || (linkData?.picture as string | undefined)
       || (videoData?.image_url as string | undefined)
+      || (photoData?.url as string | undefined)
       || (creative.thumbnail_url as string | undefined),
     video_id: (creative.video_id as string | undefined) || (videoData?.video_id as string | undefined),
     body: (creative.body as string | undefined)
@@ -219,10 +225,18 @@ export function useFacebookApi() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `${FB_API_BASE}/me/adaccounts?fields=account_id,name,currency,account_status&limit=100&access_token=${tk}`
+      const richRes = await fetch(
+        `${FB_API_BASE}/me/adaccounts?fields=account_id,name,currency,account_status,balance,amount_spent,disable_reason&limit=100&access_token=${tk}`
       );
-      const data = await res.json();
+      let data = await richRes.json();
+
+      if (data.error) {
+        const fallbackRes = await fetch(
+          `${FB_API_BASE}/me/adaccounts?fields=account_id,name,currency,account_status&limit=100&access_token=${tk}`
+        );
+        data = await fallbackRes.json();
+      }
+
       if (data.error) throw new Error(data.error.message);
       setAccounts(data.data || []);
     } catch (e: unknown) {
@@ -442,7 +456,7 @@ export function useFacebookApi() {
       if (adsData.error) throw new Error(adsData.error.message);
 
       const creativesRes = await fetch(
-        `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,effective_status,status,creative{id,name,thumbnail_url,image_url,image_hash,video_id,body,title,link_url,object_story_spec{link_data{picture,image_hash,link,name,message},video_data{image_url,video_id,message,title,call_to_action}}}&limit=500&access_token=${token}`
+        `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,effective_status,status,creative{id,name,thumbnail_url,image_url,image_hash,video_id,body,title,link_url,object_story_spec{link_data{picture,image_hash,link,name,message},photo_data{image_hash,url},video_data{image_url,video_id,message,title,call_to_action}}}&limit=500&access_token=${token}`
       );
       const creativesData = await creativesRes.json();
       if (creativesData.error) throw new Error(creativesData.error.message);

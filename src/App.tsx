@@ -1,11 +1,53 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckSquare, EyeOff, PanelLeft, Settings2, Square } from 'lucide-react';
+import { CheckSquare, EyeOff, PanelLeft, PencilLine, Settings2, Square } from 'lucide-react';
 import { CursorGlow } from './components/CursorGlow';
 import { ApiSetup } from './components/ApiSetup';
 import { Dashboard } from './components/Dashboard';
 import { useFacebookApi } from './hooks/useFacebookApi';
 
 const VISIBLE_ACCOUNTS_STORAGE_KEY = 'dashboard_visible_accounts';
+const ACCOUNT_ALIASES_STORAGE_KEY = 'dashboard_account_aliases';
+
+function parseMoneyLike(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return Number.isInteger(parsed) && Math.abs(parsed) >= 1000 ? parsed / 100 : parsed;
+}
+
+function formatCurrencyValue(value: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${value.toFixed(2)} ${currency}`;
+  }
+}
+
+function getBillingMeta(accountStatus: number, balance: number | null) {
+  if (balance !== null && balance > 0) {
+    return {
+      label: 'Задолженность',
+      tone: 'border-rose-500/20 bg-rose-500/10 text-rose-300',
+    };
+  }
+
+  if (accountStatus === 1) {
+    return {
+      label: 'Активен',
+      tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+    };
+  }
+
+  return {
+    label: 'Проверить биллинг',
+    tone: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
+  };
+}
 
 export function App() {
   const {
@@ -18,6 +60,19 @@ export function App() {
   } = useFacebookApi();
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [accountSettingsSearch, setAccountSettingsSearch] = useState('');
+  const [accountAliases, setAccountAliases] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem(ACCOUNT_ALIASES_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== 'object') return {};
+      return Object.fromEntries(
+        Object.entries(parsed as Record<string, unknown>).filter(([, value]) => typeof value === 'string')
+      );
+    } catch {
+      return {};
+    }
+  });
   const [visibleAccountIds, setVisibleAccountIds] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem(VISIBLE_ACCOUNTS_STORAGE_KEY);
@@ -48,6 +103,12 @@ export function App() {
     localStorage.setItem(VISIBLE_ACCOUNTS_STORAGE_KEY, JSON.stringify(visibleAccountIds));
   }, [visibleAccountIds]);
 
+  useEffect(() => {
+    localStorage.setItem(ACCOUNT_ALIASES_STORAGE_KEY, JSON.stringify(accountAliases));
+  }, [accountAliases]);
+
+  const getAccountLabel = (accountId: string, fallbackName: string) => accountAliases[accountId]?.trim() || fallbackName;
+
   const visibleAccounts = useMemo(() => {
     if (visibleAccountIds.length === 0) return accounts;
     const visible = accounts.filter((account) => visibleAccountIds.includes(account.id));
@@ -58,10 +119,10 @@ export function App() {
     const normalized = accountSettingsSearch.trim().toLowerCase();
     if (!normalized) return accounts;
     return accounts.filter((account) => {
-      const haystack = `${account.name} ${account.account_id} ${account.currency}`.toLowerCase();
+      const haystack = `${account.name} ${getAccountLabel(account.id, account.name)} ${account.account_id} ${account.currency}`.toLowerCase();
       return haystack.includes(normalized);
     });
-  }, [accounts, accountSettingsSearch]);
+  }, [accounts, accountAliases, accountSettingsSearch]);
 
   const toggleVisibleAccount = (accountId: string) => {
     setVisibleAccountIds((prev) => {
@@ -69,6 +130,21 @@ export function App() {
       if (exists && prev.length === 1) return prev;
       if (exists) return prev.filter((id) => id !== accountId);
       return [...prev, accountId];
+    });
+  };
+
+  const renameAccount = (accountId: string, currentName: string) => {
+    const nextName = window.prompt('Новое имя для кабинета в этом дашборде:', getAccountLabel(accountId, currentName));
+    if (nextName === null) return;
+
+    const trimmed = nextName.trim();
+    setAccountAliases((prev) => {
+      if (!trimmed) {
+        const next = { ...prev };
+        delete next[accountId];
+        return next;
+      }
+      return { ...prev, [accountId]: trimmed };
     });
   };
 
@@ -159,7 +235,7 @@ export function App() {
                             <Square className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" />
                           )}
                           <div className="min-w-0">
-                            <div className="truncate text-sm text-white">{account.name}</div>
+                            <div className="truncate text-sm text-white">{getAccountLabel(account.id, account.name)}</div>
                             <div className="text-xs text-gray-500">ID: {account.account_id}</div>
                           </div>
                         </button>
@@ -177,30 +253,54 @@ export function App() {
               <div className="h-[calc(100%-5.5rem)] overflow-y-auto px-3 py-3">
                 {visibleAccounts.map((account) => {
                   const isActive = selectedAccount?.id === account.id;
+                  const balance = parseMoneyLike(account.balance);
+                  const billingMeta = getBillingMeta(account.account_status, balance);
                   return (
-                    <button
+                    <div
                       key={account.id}
-                      onClick={() => fetchInsights(account, currentDateRange)}
-                      className={`mb-2 w-full rounded-2xl border px-4 py-4 text-left transition-all ${
+                      className={`mb-2 rounded-2xl border px-4 py-4 transition-all ${
                         isActive
                           ? 'border-indigo-500/30 bg-indigo-500/12 shadow-lg shadow-indigo-500/10'
                           : 'border-white/5 bg-white/[0.03] hover:bg-white/[0.05]'
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <button
+                          onClick={() => fetchInsights(account, currentDateRange)}
+                          className="min-w-0 flex-1 text-left"
+                        >
                           <div className={`truncate text-sm font-medium ${isActive ? 'text-indigo-200' : 'text-white'}`}>
-                            {account.name}
+                            {getAccountLabel(account.id, account.name)}
                           </div>
                           <div className="mt-1 text-xs text-gray-500">{account.account_id} · {account.currency}</div>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-medium ${billingMeta.tone}`}>
+                              {billingMeta.label}
+                            </span>
+                            {balance !== null && balance > 0 && (
+                              <span className="text-xs text-rose-300">
+                                {formatCurrencyValue(balance, account.currency)}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => renameAccount(account.id, account.name)}
+                            className="rounded-lg border border-white/10 bg-white/5 p-2 text-gray-400 hover:bg-white/10 hover:text-white"
+                            title="Переименовать для себя"
+                          >
+                            <PencilLine className="h-4 w-4" />
+                          </button>
+                          {isActive ? (
+                            <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-indigo-400" />
+                          ) : (
+                            <EyeOff className="h-4 w-4 shrink-0 text-gray-600" />
+                          )}
                         </div>
-                        {isActive ? (
-                          <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-indigo-400" />
-                        ) : (
-                          <EyeOff className="h-4 w-4 shrink-0 text-gray-600" />
-                        )}
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>

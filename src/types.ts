@@ -4,6 +4,9 @@ export interface AdAccount {
   name: string;
   currency: string;
   account_status: number;
+  balance?: string;
+  amount_spent?: string;
+  disable_reason?: number;
 }
 
 export interface CampaignInsight {

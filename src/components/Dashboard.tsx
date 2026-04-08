@@ -502,7 +502,7 @@ export function Dashboard({
 
   const handleOpenCreative = async (ad: AdHierarchyItem) => {
     setCreativePreview(ad);
-    if ((ad.creative?.video_source || ad.creative?.image_url || ad.creative?.thumbnail_url) || !ad.id) return;
+    if (!ad.id || ad.creative?.preview_html) return;
 
     setIsPreviewLoading(true);
     await onLoadAdPreview(ad.id);
@@ -1213,7 +1213,7 @@ export function Dashboard({
                     poster={creativePreview.creative.thumbnail_url || creativePreview.creative.image_url}
                     className="block max-h-[calc(72vh-2rem)] w-auto max-w-full overflow-hidden rounded-xl bg-[#080d14] object-contain"
                   />
-                ) : creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url ? (
+                ) : creativePreview.creative?.image_hash && (creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url) ? (
                   <img
                     src={creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url}
                     alt={creativePreview.name}
@@ -1229,6 +1229,12 @@ export function Dashboard({
                       scrolling="no"
                     />
                   </div>
+                ) : creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url ? (
+                  <img
+                    src={creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url}
+                    alt={creativePreview.name}
+                    className="block max-h-[calc(72vh-2rem)] w-auto max-w-full rounded-xl object-contain"
+                  />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-sm text-gray-500">
                     {isPreviewLoading
