@@ -335,6 +335,49 @@ export function useFacebookApi() {
     setDailyData(accountDailyData);
   }, [accountInsights, accountDailyData]);
 
+  const loadAdPreview = useCallback(async (adId: string) => {
+    if (!token || !adId) return;
+
+    try {
+      const previewRes = await fetch(
+        `${FB_API_BASE}/${adId}/previews?ad_format=DESKTOP_FEED_STANDARD&access_token=${token}`
+      );
+      const previewData = await previewRes.json();
+      if (previewData.error) throw new Error(previewData.error.message);
+
+      const html = (previewData.data?.[0]?.body as string | undefined) || '';
+      if (!html) return;
+
+      setCampaignNodesById((prev) => {
+        const next = { ...prev };
+        for (const [campaignId, node] of Object.entries(prev)) {
+          const updatedAdsets = node.adsets.map((group) => ({
+            ...group,
+            ads: group.ads.map((ad) => (
+              ad.id === adId
+                ? {
+                    ...ad,
+                    creative: {
+                      ...ad.creative,
+                      preview_html: html,
+                    },
+                  }
+                : ad
+            )),
+          }));
+
+          next[campaignId] = {
+            ...node,
+            adsets: updatedAdsets,
+          };
+        }
+        return next;
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to fetch ad preview');
+    }
+  }, [token]);
+
   const loadCampaignTree = useCallback(async (campaign: CampaignInsight) => {
     if (!token || !selectedAccount) return;
     if (campaignNodesById[campaign.campaign_id]) return;
@@ -481,5 +524,6 @@ export function useFacebookApi() {
     campaignNodesById,
     loadingCampaignTreeId,
     loadCampaignTree,
+    loadAdPreview,
   };
 }

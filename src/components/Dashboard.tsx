@@ -59,6 +59,7 @@ interface DashboardProps {
   campaignNodesById: Record<string, CampaignNode>;
   loadingCampaignTreeId: string | null;
   onLoadCampaignTree: (campaign: CampaignInsight) => Promise<void>;
+  onLoadAdPreview: (adId: string) => Promise<void>;
 }
 
 function formatNum(n: number, decimals = 0): string {
@@ -164,7 +165,7 @@ const moveMetric = (arr: MetricKey[], source: MetricKey, target: MetricKey): Met
 export function Dashboard({
   account, insights, campaigns, dailyData,
   selectedCampaignId, onSelectCampaign, onClearCampaign,
-  campaignNodesById, loadingCampaignTreeId, onLoadCampaignTree,
+  campaignNodesById, loadingCampaignTreeId, onLoadCampaignTree, onLoadAdPreview,
 }: DashboardProps) {
   const [chartMetric, setChartMetric] = useState<ChartMetricKey>('purchases');
   const [showChartDropdown, setShowChartDropdown] = useState(false);
@@ -182,6 +183,7 @@ export function Dashboard({
   const [expandedCampaignIds, setExpandedCampaignIds] = useState<string[]>([]);
   const [expandedAdsetIds, setExpandedAdsetIds] = useState<string[]>([]);
   const [creativePreview, setCreativePreview] = useState<AdHierarchyItem | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [visibleMetricKeys, setVisibleMetricKeys] = useState<MetricKey[]>(() => {
     try {
       const raw = localStorage.getItem(METRICS_STORAGE_KEY);
@@ -240,6 +242,20 @@ export function Dashboard({
   useEffect(() => {
     localStorage.setItem('dashboard_funnel_goal', funnelGoal);
   }, [funnelGoal]);
+
+  useEffect(() => {
+    if (!creativePreview) return;
+
+    for (const node of Object.values(campaignNodesById)) {
+      for (const group of node.adsets) {
+        const match = group.ads.find((ad) => ad.id === creativePreview.id);
+        if (match && match !== creativePreview) {
+          setCreativePreview(match);
+          return;
+        }
+      }
+    }
+  }, [campaignNodesById, creativePreview]);
 
   const metrics = [
     {
@@ -463,6 +479,15 @@ export function Dashboard({
         ? prev.filter((id) => id !== adsetId)
         : [...prev, adsetId]
     ));
+  };
+
+  const handleOpenCreative = async (ad: AdHierarchyItem) => {
+    setCreativePreview(ad);
+    if (ad.creative?.preview_html || !ad.id) return;
+
+    setIsPreviewLoading(true);
+    await onLoadAdPreview(ad.id);
+    setIsPreviewLoading(false);
   };
 
   const handleExportImage = async () => {
@@ -1076,7 +1101,7 @@ export function Dashboard({
                                   <div className="flex items-center justify-between gap-3 pl-16">
                                     <span className="truncate text-sm text-gray-300">{ad.name}</span>
                                     <button
-                                      onClick={() => setCreativePreview(ad)}
+                                      onClick={() => void handleOpenCreative(ad)}
                                       className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10"
                                     >
                                       <ImageIcon className="h-3.5 w-3.5" />
@@ -1128,7 +1153,14 @@ export function Dashboard({
 
             <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
               <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
-                {creativePreview.creative?.media_type === 'video' && creativePreview.creative?.video_source ? (
+                {creativePreview.creative?.preview_html ? (
+                  <iframe
+                    title={`preview-${creativePreview.id}`}
+                    srcDoc={creativePreview.creative.preview_html}
+                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                    className="h-[520px] w-full bg-white"
+                  />
+                ) : creativePreview.creative?.media_type === 'video' && creativePreview.creative?.video_source ? (
                   <video
                     src={creativePreview.creative.video_source}
                     controls
@@ -1145,7 +1177,9 @@ export function Dashboard({
                   />
                 ) : (
                   <div className="flex h-[520px] items-center justify-center text-sm text-gray-500">
-                    Превью картинки недоступно. Возможно, у объявления только видео или внешний объект.
+                    {isPreviewLoading
+                      ? 'Загружаю preview из Meta...'
+                      : 'Превью недоступно. Можно открыть оригинал по ссылке справа.'}
                   </div>
                 )}
               </div>
@@ -1178,7 +1212,7 @@ export function Dashboard({
                     <div className="mt-2 text-sm text-gray-500">Ссылка не пришла от API.</div>
                   )}
                 </div>
-                {(creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url) && (
+                {(creativePreview.creative?.video_source || creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url) && (
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                     <div className="text-xs uppercase tracking-[0.18em] text-gray-500">
                       {creativePreview.creative?.media_type === 'video' ? 'Исходный файл' : 'Исходное изображение'}

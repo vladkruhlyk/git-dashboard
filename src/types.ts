@@ -38,6 +38,7 @@ export interface CreativePreview {
   media_type?: 'image' | 'video' | 'unknown';
   video_id?: string;
   video_source?: string;
+  preview_html?: string;
   body?: string;
   title?: string;
   link_url?: string;
