@@ -167,8 +167,6 @@ export function Dashboard({
   selectedCampaignId, onSelectCampaign, onClearCampaign,
   campaignNodesById, loadingCampaignTreeId, onLoadCampaignTree, onLoadAdPreview,
 }: DashboardProps) {
-  const PREVIEW_BASE_WIDTH = 400;
-  const PREVIEW_BASE_HEIGHT = 820;
   const [chartMetric, setChartMetric] = useState<ChartMetricKey>('purchases');
   const [showChartDropdown, setShowChartDropdown] = useState(false);
   const [showFunnelGoalDropdown, setShowFunnelGoalDropdown] = useState(false);
@@ -186,7 +184,6 @@ export function Dashboard({
   const [expandedAdsetIds, setExpandedAdsetIds] = useState<string[]>([]);
   const [creativePreview, setCreativePreview] = useState<AdHierarchyItem | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const [creativePreviewScale, setCreativePreviewScale] = useState(1);
   const [visibleMetricKeys, setVisibleMetricKeys] = useState<MetricKey[]>(() => {
     try {
       const raw = localStorage.getItem(METRICS_STORAGE_KEY);
@@ -223,7 +220,6 @@ export function Dashboard({
   });
   const [exportError, setExportError] = useState<string | null>(null);
   const dashboardRef = useRef<HTMLDivElement>(null);
-  const creativePreviewViewportRef = useRef<HTMLDivElement>(null);
 
   const activeChartOption = chartOptions.find(o => o.value === chartMetric) || chartOptions[0];
 
@@ -260,25 +256,6 @@ export function Dashboard({
       }
     }
   }, [campaignNodesById, creativePreview]);
-
-  useEffect(() => {
-    if (!creativePreview?.creative?.preview_html) return;
-
-    const element = creativePreviewViewportRef.current;
-    if (!element) return;
-
-    const updateScale = () => {
-      const nextScale = Math.min(element.clientWidth / PREVIEW_BASE_WIDTH, 1);
-      setCreativePreviewScale(nextScale > 0 ? nextScale : 1);
-    };
-
-    updateScale();
-
-    const observer = new ResizeObserver(() => updateScale());
-    observer.observe(element);
-
-    return () => observer.disconnect();
-  }, [creativePreview]);
 
   const metrics = [
     {
@@ -506,7 +483,7 @@ export function Dashboard({
 
   const handleOpenCreative = async (ad: AdHierarchyItem) => {
     setCreativePreview(ad);
-    if (ad.creative?.preview_html || !ad.id) return;
+    if ((ad.creative?.video_source || ad.creative?.image_url || ad.creative?.thumbnail_url) || !ad.id) return;
 
     setIsPreviewLoading(true);
     await onLoadAdPreview(ad.id);
@@ -1157,7 +1134,7 @@ export function Dashboard({
       {creativePreview && (
         <>
           <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm" onClick={() => setCreativePreview(null)} />
-          <div className="fixed inset-x-4 top-1/2 z-[80] mx-auto w-full max-w-3xl -translate-y-1/2 rounded-[28px] border border-white/10 bg-[#0d1117] p-6 shadow-2xl shadow-black/70">
+          <div className="fixed inset-x-4 top-1/2 z-[80] mx-auto w-full max-w-6xl -translate-y-1/2 rounded-[28px] border border-white/10 bg-[#0d1117] p-6 shadow-2xl shadow-black/70">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 text-sm text-indigo-300">
@@ -1174,49 +1151,28 @@ export function Dashboard({
               </button>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
-              <div
-                ref={creativePreviewViewportRef}
-                className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]"
-              >
-                {creativePreview.creative?.preview_html ? (
-                  <div
-                    className="relative mx-auto overflow-hidden bg-[#080d14]"
-                    style={{ height: `${PREVIEW_BASE_HEIGHT * creativePreviewScale}px` }}
-                  >
-                    <iframe
-                      title={`preview-${creativePreview.id}`}
-                      srcDoc={creativePreview.creative.preview_html}
-                      sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-                      className="absolute left-1/2 top-0 border-0 bg-white"
-                      style={{
-                        width: `${PREVIEW_BASE_WIDTH}px`,
-                        height: `${PREVIEW_BASE_HEIGHT}px`,
-                        transform: `translateX(-50%) scale(${creativePreviewScale})`,
-                        transformOrigin: 'top center',
-                      }}
-                    />
-                  </div>
-                ) : creativePreview.creative?.media_type === 'video' && creativePreview.creative?.video_source ? (
+            <div className="grid gap-6 md:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+              <div className="flex min-h-[320px] max-h-[72vh] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[#080d14] p-4">
+                {creativePreview.creative?.media_type === 'video' && creativePreview.creative?.video_source ? (
                   <video
                     src={creativePreview.creative.video_source}
                     controls
                     playsInline
                     preload="metadata"
                     poster={creativePreview.creative.thumbnail_url || creativePreview.creative.image_url}
-                    className="h-[520px] w-full bg-[#080d14]"
+                    className="max-h-[calc(72vh-2rem)] w-auto max-w-full rounded-xl bg-[#080d14] object-contain"
                   />
                 ) : creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url ? (
                   <img
                     src={creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url}
                     alt={creativePreview.name}
-                    className="h-[520px] w-full object-contain bg-[#080d14]"
+                    className="max-h-[calc(72vh-2rem)] w-auto max-w-full rounded-xl object-contain"
                   />
                 ) : (
-                  <div className="flex h-[520px] items-center justify-center text-sm text-gray-500">
+                  <div className="flex h-full w-full items-center justify-center text-sm text-gray-500">
                     {isPreviewLoading
-                      ? 'Загружаю preview из Meta...'
-                      : 'Превью недоступно. Можно открыть оригинал по ссылке справа.'}
+                      ? 'Загружаю медиа креатива...'
+                      : 'Медиа недоступно. Можно открыть оригинал по ссылке справа.'}
                   </div>
                 )}
               </div>
