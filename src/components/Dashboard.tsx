@@ -940,7 +940,7 @@ export function Dashboard({
       )}
 
       {campaigns.length > 0 && (
-        <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl overflow-hidden">
+        <div className="overflow-visible rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl">
           <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold text-white">Кампании и структура</h3>
@@ -1009,7 +1009,7 @@ export function Dashboard({
             </div>
           </div>
           {showCampaignHierarchy && (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-visible">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/5">
