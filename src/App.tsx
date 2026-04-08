@@ -174,7 +174,7 @@ export function App() {
 
               <div className="h-[calc(100%-5.5rem)] overflow-y-auto px-3 py-3">
                 {visibleAccounts.map((account) => {
-                  const isActive = selectedAccount.id === account.id;
+                  const isActive = selectedAccount?.id === account.id;
                   return (
                     <button
                       key={account.id}
