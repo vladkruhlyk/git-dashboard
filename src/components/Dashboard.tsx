@@ -112,6 +112,36 @@ function hasEditableBudget(item: Pick<CampaignInsight, 'daily_budget' | 'lifetim
   return Boolean(item.daily_budget || item.lifetime_budget);
 }
 
+function StatusSwitch({
+  checked,
+  loading,
+  onToggle,
+}: {
+  checked: boolean;
+  loading: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={loading}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-all ${
+        checked
+          ? 'border-emerald-400/30 bg-emerald-500/20'
+          : 'border-white/10 bg-white/5'
+      } ${loading ? 'cursor-wait opacity-70' : 'hover:border-white/20'}`}
+      aria-pressed={checked}
+    >
+      <span
+        className={`absolute h-4.5 w-4.5 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? 'translate-x-[22px]' : 'translate-x-[3px]'
+        }`}
+      />
+    </button>
+  );
+}
+
 const parseActions = (actions: Array<{ action_type: string; value: string }> | undefined, type: string): number => {
   if (!actions) return 0;
   const found = actions.find(a => a.action_type === type);
@@ -1001,12 +1031,11 @@ export function Dashboard({
                               </div>
                             </button>
                             <div className="ml-auto flex shrink-0 items-center gap-2">
-                              <button
-                                onClick={() => void handleToggleStatus({ id: c.campaign_id, level: 'campaign', effective_status: c.effective_status, configured_status: c.configured_status })}
-                                className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
-                              >
-                                {entityActionId === c.campaign_id ? '...' : isActiveEntity(c.effective_status, c.configured_status) ? 'Выкл' : 'Вкл'}
-                              </button>
+                              <StatusSwitch
+                                checked={isActiveEntity(c.effective_status, c.configured_status)}
+                                loading={entityActionId === c.campaign_id}
+                                onToggle={() => void handleToggleStatus({ id: c.campaign_id, level: 'campaign', effective_status: c.effective_status, configured_status: c.configured_status })}
+                              />
                               {hasEditableBudget(c) && (
                                 <button
                                   onClick={() => void handleBudgetChange({ id: c.campaign_id, level: 'campaign', daily_budget: c.daily_budget, lifetime_budget: c.lifetime_budget })}
@@ -1083,12 +1112,11 @@ export function Dashboard({
                                     {renderStatusBadges(adset)}
                                   </div>
                                   <div className="ml-auto flex shrink-0 items-center gap-2">
-                                    <button
-                                      onClick={() => void handleToggleStatus(adset)}
-                                      className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
-                                    >
-                                      {entityActionId === adset.id ? '...' : isActiveEntity(adset.effective_status, adset.configured_status) ? 'Выкл' : 'Вкл'}
-                                    </button>
+                                    <StatusSwitch
+                                      checked={isActiveEntity(adset.effective_status, adset.configured_status)}
+                                      loading={entityActionId === adset.id}
+                                      onToggle={() => void handleToggleStatus(adset)}
+                                    />
                                     {hasEditableBudget(adset) && (
                                       <button
                                         onClick={() => void handleBudgetChange(adset)}
@@ -1117,12 +1145,11 @@ export function Dashboard({
                                       {renderStatusBadges(ad)}
                                     </div>
                                     <div className="flex shrink-0 items-center gap-2">
-                                      <button
-                                        onClick={() => void handleToggleStatus(ad)}
-                                        className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
-                                      >
-                                        {entityActionId === ad.id ? '...' : isActiveEntity(ad.effective_status, ad.configured_status) ? 'Выкл' : 'Вкл'}
-                                      </button>
+                                      <StatusSwitch
+                                        checked={isActiveEntity(ad.effective_status, ad.configured_status)}
+                                        loading={entityActionId === ad.id}
+                                        onToggle={() => void handleToggleStatus(ad)}
+                                      />
                                       <button
                                         onClick={() => void handleOpenCreative(ad)}
                                         className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10"
