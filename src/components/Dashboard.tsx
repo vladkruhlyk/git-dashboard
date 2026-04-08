@@ -62,6 +62,8 @@ interface DashboardProps {
   loadingCampaignTreeId: string | null;
   onLoadCampaignTree: (campaign: CampaignInsight) => Promise<void>;
   onLoadAdPreview: (adId: string) => Promise<void>;
+  onUpdateEntityStatus: (level: 'campaign' | 'adset' | 'ad', id: string, status: 'ACTIVE' | 'PAUSED') => Promise<void>;
+  onUpdateEntityBudget: (level: 'campaign' | 'adset', id: string, budgetType: 'daily_budget' | 'lifetime_budget', amount: number) => Promise<void>;
 }
 
 function formatNum(n: number, decimals = 0): string {
@@ -201,7 +203,7 @@ const moveMetric = (arr: MetricKey[], source: MetricKey, target: MetricKey): Met
 export function Dashboard({
   account, insights, campaigns, dailyData,
   selectedCampaignId, onSelectCampaign, onClearCampaign,
-  campaignNodesById, loadingCampaignTreeId, onLoadCampaignTree, onLoadAdPreview,
+  campaignNodesById, loadingCampaignTreeId, onLoadCampaignTree, onLoadAdPreview, onUpdateEntityStatus, onUpdateEntityBudget,
 }: DashboardProps) {
   const [chartMetric, setChartMetric] = useState<ChartMetricKey>('purchases');
   const [showChartDropdown, setShowChartDropdown] = useState(false);
@@ -221,6 +223,7 @@ export function Dashboard({
   const [expandedAdsetIds, setExpandedAdsetIds] = useState<string[]>([]);
   const [creativePreview, setCreativePreview] = useState<AdHierarchyItem | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [entityActionId, setEntityActionId] = useState<string | null>(null);
   const [visibleMetricKeys, setVisibleMetricKeys] = useState<MetricKey[]>(() => {
     try {
       const raw = localStorage.getItem(getMetricsStorageKey(account.id));
@@ -542,6 +545,51 @@ export function Dashboard({
     setIsPreviewLoading(true);
     await onLoadAdPreview(ad.id);
     setIsPreviewLoading(false);
+  };
+
+  const parseStoredBudget = (value?: string) => {
+    if (!value) return 0;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 0;
+    return parsed / 100;
+  };
+
+  const handleToggleStatus = async (item: Pick<AdHierarchyItem, 'id' | 'level' | 'effective_status' | 'configured_status'>) => {
+    const nextStatus = isActiveEntity(item.effective_status, item.configured_status) ? 'PAUSED' : 'ACTIVE';
+    setEntityActionId(item.id);
+    try {
+      await onUpdateEntityStatus(item.level, item.id, nextStatus);
+    } catch (error) {
+      console.error(error);
+      setExportError(error instanceof Error ? error.message : 'Не удалось обновить статус.');
+    } finally {
+      setEntityActionId(null);
+    }
+  };
+
+  const handleBudgetChange = async (item: Pick<AdHierarchyItem, 'id' | 'level' | 'daily_budget' | 'lifetime_budget'>) => {
+    const budgetType = item.daily_budget ? 'daily_budget' : item.lifetime_budget ? 'lifetime_budget' : 'daily_budget';
+    const currentValue = parseStoredBudget(item[budgetType]);
+    const raw = window.prompt(
+      `Новый ${budgetType === 'daily_budget' ? 'дневной' : 'общий'} бюджет в ${account.currency}:`,
+      currentValue > 0 ? currentValue.toFixed(2) : ''
+    );
+    if (raw === null) return;
+    const amount = Number(raw.replace(',', '.'));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setExportError('Бюджет должен быть положительным числом.');
+      return;
+    }
+
+    setEntityActionId(item.id);
+    try {
+      await onUpdateEntityBudget(item.level as 'campaign' | 'adset', item.id, budgetType, amount);
+    } catch (error) {
+      console.error(error);
+      setExportError(error instanceof Error ? error.message : 'Не удалось обновить бюджет.');
+    } finally {
+      setEntityActionId(null);
+    }
   };
 
   const handleExportImage = async () => {
@@ -948,6 +996,20 @@ export function Dashboard({
                                 </div>
                               </div>
                             </button>
+                            <div className="ml-auto flex shrink-0 items-center gap-2">
+                              <button
+                                onClick={() => void handleToggleStatus({ id: c.campaign_id, level: 'campaign', effective_status: c.effective_status, configured_status: c.configured_status })}
+                                className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
+                              >
+                                {entityActionId === c.campaign_id ? '...' : isActiveEntity(c.effective_status, c.configured_status) ? 'Выкл' : 'Вкл'}
+                              </button>
+                              <button
+                                onClick={() => void handleBudgetChange({ id: c.campaign_id, level: 'campaign', daily_budget: c.daily_budget, lifetime_budget: c.lifetime_budget })}
+                                className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
+                              >
+                                Бюджет
+                              </button>
+                            </div>
                           </div>
                         </td>
                         {breakdownColumns
@@ -1014,6 +1076,20 @@ export function Dashboard({
                                     <span className="block truncate text-sm text-gray-200">{adset.name}</span>
                                     {renderStatusBadges(adset)}
                                   </div>
+                                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                                    <button
+                                      onClick={() => void handleToggleStatus(adset)}
+                                      className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
+                                    >
+                                      {entityActionId === adset.id ? '...' : isActiveEntity(adset.effective_status, adset.configured_status) ? 'Выкл' : 'Вкл'}
+                                    </button>
+                                    <button
+                                      onClick={() => void handleBudgetChange(adset)}
+                                      className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
+                                    >
+                                      Бюджет
+                                    </button>
+                                  </div>
                                 </div>
                               </td>
                               {breakdownColumns
@@ -1032,13 +1108,21 @@ export function Dashboard({
                                       <span className="block truncate text-sm text-gray-300">{ad.name}</span>
                                       {renderStatusBadges(ad)}
                                     </div>
-                                    <button
-                                      onClick={() => void handleOpenCreative(ad)}
-                                      className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10"
-                                    >
-                                      <ImageIcon className="h-3.5 w-3.5" />
-                                      Креатив
-                                    </button>
+                                    <div className="flex shrink-0 items-center gap-2">
+                                      <button
+                                        onClick={() => void handleToggleStatus(ad)}
+                                        className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
+                                      >
+                                        {entityActionId === ad.id ? '...' : isActiveEntity(ad.effective_status, ad.configured_status) ? 'Выкл' : 'Вкл'}
+                                      </button>
+                                      <button
+                                        onClick={() => void handleOpenCreative(ad)}
+                                        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10"
+                                      >
+                                        <ImageIcon className="h-3.5 w-3.5" />
+                                        Креатив
+                                      </button>
+                                    </div>
                                   </div>
                                 </td>
                                 {breakdownColumns

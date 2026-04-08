@@ -65,6 +65,7 @@ export function App() {
     fetchAccounts, fetchInsights, disconnect, setError,
     selectedCampaignId, selectCampaign, clearCampaignSelection,
     currentDateRange, campaignNodesById, loadingCampaignTreeId, loadCampaignTree, loadAdPreview,
+    updateEntityStatus, updateEntityBudget,
   } = useFacebookApi();
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [accountSettingsSearch, setAccountSettingsSearch] = useState('');
@@ -383,6 +384,8 @@ export function App() {
                   loadingCampaignTreeId={loadingCampaignTreeId}
                   onLoadCampaignTree={loadCampaignTree}
                   onLoadAdPreview={loadAdPreview}
+                  onUpdateEntityStatus={updateEntityStatus}
+                  onUpdateEntityBudget={updateEntityBudget}
                 />
               ) : (
                 <div className="flex min-h-[60vh] items-center justify-center">

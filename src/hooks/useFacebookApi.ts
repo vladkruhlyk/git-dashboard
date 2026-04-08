@@ -144,6 +144,8 @@ const toHierarchyItem = (
     level,
     effective_status: row.effective_status as string | undefined,
     configured_status: (row.configured_status as string | undefined) || (row.status as string | undefined),
+    daily_budget: row.daily_budget as string | undefined,
+    lifetime_budget: row.lifetime_budget as string | undefined,
     ...parsed,
     creative,
   };
@@ -303,10 +305,10 @@ export function useFacebookApi() {
       const campaignsData = await campaignsRes.json();
       if (!campaignsData.error) {
         const campaignMetaRes = await fetch(
-          `${FB_API_BASE}/${account.id}/campaigns?fields=id,effective_status,status&limit=200&access_token=${token}`
+          `${FB_API_BASE}/${account.id}/campaigns?fields=id,effective_status,status,daily_budget,lifetime_budget&limit=200&access_token=${token}`
         );
         const campaignMetaData = await campaignMetaRes.json();
-        const campaignStatusById = new Map<string, { effective_status?: string; configured_status?: string }>();
+        const campaignStatusById = new Map<string, { effective_status?: string; configured_status?: string; daily_budget?: string; lifetime_budget?: string }>();
 
         if (!campaignMetaData.error) {
           for (const campaignRow of (campaignMetaData.data || []) as Array<Record<string, unknown>>) {
@@ -315,6 +317,8 @@ export function useFacebookApi() {
             campaignStatusById.set(id, {
               effective_status: campaignRow.effective_status as string | undefined,
               configured_status: campaignRow.status as string | undefined,
+              daily_budget: campaignRow.daily_budget as string | undefined,
+              lifetime_budget: campaignRow.lifetime_budget as string | undefined,
             });
           }
         }
@@ -323,6 +327,8 @@ export function useFacebookApi() {
           ...campaign,
           effective_status: campaignStatusById.get(campaign.campaign_id)?.effective_status,
           configured_status: campaignStatusById.get(campaign.campaign_id)?.configured_status,
+          daily_budget: campaignStatusById.get(campaign.campaign_id)?.daily_budget,
+          lifetime_budget: campaignStatusById.get(campaign.campaign_id)?.lifetime_budget,
         })));
       }
 
@@ -457,9 +463,9 @@ export function useFacebookApi() {
       const adsetsData = await adsetsRes.json();
       if (adsetsData.error) throw new Error(adsetsData.error.message);
 
-      const adsetStatusById = new Map<string, { effective_status?: string; configured_status?: string }>();
+      const adsetStatusById = new Map<string, { effective_status?: string; configured_status?: string; daily_budget?: string; lifetime_budget?: string }>();
       const adsetsMetaRows = await fetchAllPages(
-        `${FB_API_BASE}/${campaign.campaign_id}/adsets?fields=id,effective_status,status&limit=100&access_token=${token}`
+        `${FB_API_BASE}/${campaign.campaign_id}/adsets?fields=id,effective_status,status,daily_budget,lifetime_budget&limit=100&access_token=${token}`
       );
       for (const adsetRow of adsetsMetaRows) {
         const id = adsetRow.id as string | undefined;
@@ -467,6 +473,8 @@ export function useFacebookApi() {
         adsetStatusById.set(id, {
           effective_status: adsetRow.effective_status as string | undefined,
           configured_status: adsetRow.status as string | undefined,
+          daily_budget: adsetRow.daily_budget as string | undefined,
+          lifetime_budget: adsetRow.lifetime_budget as string | undefined,
         });
       }
 
@@ -577,6 +585,8 @@ export function useFacebookApi() {
               ...row,
               effective_status: adsetStatusById.get(adsetId)?.effective_status,
               status: adsetStatusById.get(adsetId)?.configured_status,
+              daily_budget: adsetStatusById.get(adsetId)?.daily_budget,
+              lifetime_budget: adsetStatusById.get(adsetId)?.lifetime_budget,
             }, 'adset', 'adset_id', 'adset_name'),
             ads: (adsByAdsetId.get(adsetId) || []).sort((a, b) => b.impressions - a.impressions),
           };
@@ -607,6 +617,123 @@ export function useFacebookApi() {
     localStorage.removeItem('fb_token');
   }, []);
 
+  const updateEntityStatus = useCallback(async (
+    level: 'campaign' | 'adset' | 'ad',
+    id: string,
+    status: 'ACTIVE' | 'PAUSED'
+  ) => {
+    if (!token) return;
+
+    const params = new URLSearchParams();
+    params.set('status', status);
+    params.set('access_token', token);
+
+    const res = await fetch(`${FB_API_BASE}/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    if (level === 'campaign') {
+      setCampaigns((prev) => prev.map((campaign) => (
+        campaign.campaign_id === id
+          ? { ...campaign, effective_status: status, configured_status: status }
+          : campaign
+      )));
+    }
+
+    setCampaignNodesById((prev) => {
+      const next = { ...prev };
+      for (const [campaignId, node] of Object.entries(prev)) {
+        let updatedNode = node;
+
+        if (level === 'campaign' && node.campaign.id === id) {
+          updatedNode = {
+            ...updatedNode,
+            campaign: { ...updatedNode.campaign, effective_status: status, configured_status: status },
+          };
+        }
+
+        updatedNode = {
+          ...updatedNode,
+          adsets: updatedNode.adsets.map((group) => ({
+            adset: level === 'adset' && group.adset.id === id
+              ? { ...group.adset, effective_status: status, configured_status: status }
+              : group.adset,
+            ads: group.ads.map((ad) => (
+              level === 'ad' && ad.id === id
+                ? { ...ad, effective_status: status, configured_status: status }
+                : ad
+            )),
+          })),
+        };
+
+        next[campaignId] = updatedNode;
+      }
+      return next;
+    });
+  }, [token]);
+
+  const updateEntityBudget = useCallback(async (
+    level: 'campaign' | 'adset',
+    id: string,
+    budgetType: 'daily_budget' | 'lifetime_budget',
+    amount: number
+  ) => {
+    if (!token) return;
+
+    const params = new URLSearchParams();
+    params.set(budgetType, String(Math.round(amount * 100)));
+    params.set('access_token', token);
+
+    const res = await fetch(`${FB_API_BASE}/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const budgetValue = String(Math.round(amount * 100));
+
+    if (level === 'campaign') {
+      setCampaigns((prev) => prev.map((campaign) => (
+        campaign.campaign_id === id
+          ? { ...campaign, [budgetType]: budgetValue }
+          : campaign
+      )));
+    }
+
+    setCampaignNodesById((prev) => {
+      const next = { ...prev };
+      for (const [campaignId, node] of Object.entries(prev)) {
+        let updatedNode = node;
+
+        if (level === 'campaign' && node.campaign.id === id) {
+          updatedNode = {
+            ...updatedNode,
+            campaign: { ...updatedNode.campaign, [budgetType]: budgetValue },
+          };
+        }
+
+        updatedNode = {
+          ...updatedNode,
+          adsets: updatedNode.adsets.map((group) => ({
+            adset: level === 'adset' && group.adset.id === id
+              ? { ...group.adset, [budgetType]: budgetValue }
+              : group.adset,
+            ads: group.ads,
+          })),
+        };
+
+        next[campaignId] = updatedNode;
+      }
+      return next;
+    });
+  }, [token]);
+
   return {
     token, saveToken, accounts, selectedAccount,
     insights, campaigns, dailyData,
@@ -618,5 +745,7 @@ export function useFacebookApi() {
     loadingCampaignTreeId,
     loadCampaignTree,
     loadAdPreview,
+    updateEntityStatus,
+    updateEntityBudget,
   };
 }

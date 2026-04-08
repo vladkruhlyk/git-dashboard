@@ -14,6 +14,8 @@ export interface CampaignInsight {
   campaign_id: string;
   effective_status?: string;
   configured_status?: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
   spend: string;
   impressions: string;
   reach: string;
@@ -55,6 +57,8 @@ export interface AdHierarchyItem {
   level: 'campaign' | 'adset' | 'ad';
   effective_status?: string;
   configured_status?: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
   spend: number;
   impressions: number;
   reach: number;
