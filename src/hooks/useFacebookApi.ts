@@ -172,6 +172,7 @@ function parseInsightsRow(d: Record<string, unknown>): AccountInsights {
     costPerPurchase: purchases > 0 ? spend / purchases : 0,
     addToCart: parseActions(actions, 'add_to_cart'),
     leads,
+    costPerLead: leads > 0 ? spend / leads : 0,
     messagingConversations,
     costPerMessagingConversation,
   };
@@ -181,7 +182,7 @@ const emptyInsights: AccountInsights = {
   spend: 0, impressions: 0, reach: 0, clicks: 0,
   frequency: 0, cpc: 0, cpm: 0, ctr: 0, purchases: 0,
   purchaseValue: 0, roas: 0, costPerPurchase: 0,
-  addToCart: 0, leads: 0, messagingConversations: 0, costPerMessagingConversation: 0,
+  addToCart: 0, leads: 0, costPerLead: 0, messagingConversations: 0, costPerMessagingConversation: 0,
 };
 
 function parseDailyArray(data: Array<Record<string, unknown>>): DailyData[] {

@@ -28,6 +28,7 @@ type MetricKey =
   | 'roas'
   | 'costPerPurchase'
   | 'leads'
+  | 'costPerLead'
   | 'messagingConversations'
   | 'costPerMessagingConversation';
 type BreakdownColumnKey =
@@ -40,6 +41,7 @@ type BreakdownColumnKey =
   | 'cpc'
   | 'cpm'
   | 'leads'
+  | 'costPerLead'
   | 'messagingConversations'
   | 'costPerMessagingConversation'
   | 'purchases'
@@ -157,6 +159,7 @@ const defaultMetricKeys: MetricKey[] = [
   'roas',
   'costPerPurchase',
   'leads',
+  'costPerLead',
 ];
 
 const baseMetricKeys: MetricKey[] = ['spend', 'impressions', 'clicks', 'ctr', 'cpc', 'purchases'];
@@ -170,6 +173,7 @@ const defaultBreakdownColumnKeys: BreakdownColumnKey[] = [
   'cpc',
   'cpm',
   'leads',
+  'costPerLead',
   'messagingConversations',
   'costPerMessagingConversation',
   'purchases',
@@ -407,6 +411,14 @@ export function Dashboard({
       color: 'bg-indigo-500/20',
       glowColor: '#6366f1',
     },
+    {
+      key: 'costPerLead' as MetricKey,
+      title: 'Стоимость лида',
+      value: formatMoney(insights.costPerLead, account.currency),
+      icon: <DollarSign className="w-5 h-5 text-cyan-300" />,
+      color: 'bg-cyan-500/20',
+      glowColor: '#22d3ee',
+    },
   ];
 
   const metricMap = useMemo(() => {
@@ -444,6 +456,7 @@ export function Dashboard({
     { key: 'cpc' as BreakdownColumnKey, label: 'CPC' },
     { key: 'cpm' as BreakdownColumnKey, label: 'CPM' },
     { key: 'leads' as BreakdownColumnKey, label: 'Лиды' },
+    { key: 'costPerLead' as BreakdownColumnKey, label: 'Стоимость лида' },
     { key: 'messagingConversations' as BreakdownColumnKey, label: 'Переписки' },
     { key: 'costPerMessagingConversation' as BreakdownColumnKey, label: 'Цена переписки' },
     { key: 'purchases' as BreakdownColumnKey, label: 'Покупки' },
@@ -609,7 +622,7 @@ export function Dashboard({
   };
 
   const renderBreakdownCell = (
-    item: Pick<AdHierarchyItem, 'spend' | 'impressions' | 'reach' | 'frequency' | 'clicks' | 'ctr' | 'cpc' | 'cpm' | 'leads' | 'messagingConversations' | 'costPerMessagingConversation' | 'purchases' | 'costPerPurchase' | 'purchaseValue' | 'roas'>,
+    item: Pick<AdHierarchyItem, 'spend' | 'impressions' | 'reach' | 'frequency' | 'clicks' | 'ctr' | 'cpc' | 'cpm' | 'leads' | 'costPerLead' | 'messagingConversations' | 'costPerMessagingConversation' | 'purchases' | 'costPerPurchase' | 'purchaseValue' | 'roas'>,
     columnKey: BreakdownColumnKey,
     muted = false
   ) => {
@@ -632,6 +645,8 @@ export function Dashboard({
         return renderStatCell(formatMoney(item.cpm, account.currency), muted);
       case 'leads':
         return renderStatCell(formatNum(item.leads), muted);
+      case 'costPerLead':
+        return renderStatCell(formatMoney(item.costPerLead, account.currency), muted);
       case 'messagingConversations':
         return renderStatCell(formatNum(item.messagingConversations), muted);
       case 'costPerMessagingConversation':
@@ -938,6 +953,7 @@ export function Dashboard({
                                   cpc: parseFloat(c.cpc || '0'),
                                   cpm: parseFloat(c.cpm || '0'),
                                   leads: parseActions(c.actions, 'lead'),
+                                  costPerLead: parseActions(c.actions, 'lead') > 0 ? spend / parseActions(c.actions, 'lead') : 0,
                                   messagingConversations: messaging,
                                   costPerMessagingConversation: messaging > 0 ? spend / messaging : 0,
                                   purchases,

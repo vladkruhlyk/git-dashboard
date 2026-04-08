@@ -67,6 +67,7 @@ export interface AdHierarchyItem {
   purchaseValue: number;
   roas: number;
   leads: number;
+  costPerLead: number;
   messagingConversations: number;
   costPerMessagingConversation: number;
   costPerPurchase: number;
@@ -96,6 +97,7 @@ export interface AccountInsights {
   costPerPurchase: number;
   addToCart: number;
   leads: number;
+  costPerLead: number;
   messagingConversations: number;
   costPerMessagingConversation: number;
 }
