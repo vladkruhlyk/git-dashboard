@@ -28,7 +28,14 @@ function formatCurrencyValue(value: number, currency: string): string {
   }
 }
 
-function getBillingMeta(accountStatus: number, balance: number | null) {
+function getBillingMeta(accountStatus: number, balance: number | null, disableReason?: number) {
+  if (accountStatus === 1) {
+    return {
+      label: 'Активен',
+      tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+    };
+  }
+
   if (balance !== null && balance > 0) {
     return {
       label: 'Задолженность',
@@ -36,10 +43,10 @@ function getBillingMeta(accountStatus: number, balance: number | null) {
     };
   }
 
-  if (accountStatus === 1) {
+  if (disableReason !== undefined && disableReason !== 0) {
     return {
-      label: 'Активен',
-      tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+      label: 'Ограничен',
+      tone: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
     };
   }
 
@@ -254,7 +261,7 @@ export function App() {
                 {visibleAccounts.map((account) => {
                   const isActive = selectedAccount?.id === account.id;
                   const balance = parseMoneyLike(account.balance);
-                  const billingMeta = getBillingMeta(account.account_status, balance);
+                  const billingMeta = getBillingMeta(account.account_status, balance, account.disable_reason);
                   return (
                     <div
                       key={account.id}
@@ -277,7 +284,7 @@ export function App() {
                             <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-medium ${billingMeta.tone}`}>
                               {billingMeta.label}
                             </span>
-                            {balance !== null && balance > 0 && (
+                            {billingMeta.label === 'Задолженность' && balance !== null && balance > 0 && (
                               <span className="text-xs text-rose-300">
                                 {formatCurrencyValue(balance, account.currency)}
                               </span>
