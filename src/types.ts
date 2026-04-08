@@ -24,6 +24,52 @@ export interface CampaignInsight {
   date_stop: string;
 }
 
+export interface ActionStat {
+  action_type: string;
+  value: string;
+}
+
+export interface CreativePreview {
+  id?: string;
+  name?: string;
+  thumbnail_url?: string;
+  image_url?: string;
+  video_id?: string;
+  body?: string;
+  title?: string;
+  link_url?: string;
+}
+
+export interface AdHierarchyItem {
+  id: string;
+  name: string;
+  level: 'campaign' | 'adset' | 'ad';
+  spend: number;
+  impressions: number;
+  reach: number;
+  frequency: number;
+  clicks: number;
+  cpc: number;
+  cpm: number;
+  ctr: number;
+  purchases: number;
+  purchaseValue: number;
+  roas: number;
+  leads: number;
+  messagingConversations: number;
+  costPerMessagingConversation: number;
+  costPerPurchase: number;
+  creative?: CreativePreview | null;
+}
+
+export interface CampaignNode {
+  campaign: AdHierarchyItem;
+  adsets: Array<{
+    adset: AdHierarchyItem;
+    ads: AdHierarchyItem[];
+  }>;
+}
+
 export interface AccountInsights {
   spend: number;
   impressions: number;

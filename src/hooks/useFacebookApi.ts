@@ -1,5 +1,15 @@
 import { useState, useCallback } from 'react';
-import type { AdAccount, AccountInsights, CampaignInsight, DailyData, DateRange } from '../types';
+import type {
+  AdAccount,
+  AccountInsights,
+  CampaignInsight,
+  DailyData,
+  DateRange,
+  CampaignNode,
+  AdHierarchyItem,
+  CreativePreview,
+  ActionStat,
+} from '../types';
 
 const FB_API_BASE = 'https://graph.facebook.com/v21.0';
 
@@ -39,10 +49,79 @@ const messagingActionTypes = [
   'onsite_conversion.messaging_first_reply',
 ];
 
+const defaultDateRange = (): DateRange => {
+  const today = new Date();
+  const weekAgo = new Date(today);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  const toISO = (value: Date) => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  return {
+    since: toISO(weekAgo),
+    until: toISO(today),
+  };
+};
+
+const campaignFilter = (campaignId: string) =>
+  encodeURIComponent(JSON.stringify([{ field: 'campaign.id', operator: 'EQUAL', value: campaignId }]));
+
+const withTimeRange = (dateRange: DateRange) =>
+  `time_range=${encodeURIComponent(JSON.stringify({ since: dateRange.since, until: dateRange.until }))}`;
+
+const parseCreativePreview = (creative: Record<string, unknown> | undefined): CreativePreview | null => {
+  if (!creative) return null;
+
+  const objectStorySpec = creative.object_story_spec as Record<string, unknown> | undefined;
+  const linkData = objectStorySpec?.link_data as Record<string, unknown> | undefined;
+  const videoData = objectStorySpec?.video_data as Record<string, unknown> | undefined;
+  const videoCallToAction = videoData?.call_to_action as Record<string, unknown> | undefined;
+  const videoCallToActionValue = videoCallToAction?.value as Record<string, unknown> | undefined;
+
+  return {
+    id: creative.id as string | undefined,
+    name: creative.name as string | undefined,
+    thumbnail_url: creative.thumbnail_url as string | undefined,
+    image_url: (creative.image_url as string | undefined) || (linkData?.image_hash as string | undefined),
+    video_id: creative.video_id as string | undefined,
+    body: (creative.body as string | undefined)
+      || (linkData?.message as string | undefined)
+      || (videoData?.message as string | undefined),
+    title: (creative.title as string | undefined)
+      || (linkData?.name as string | undefined)
+      || (videoData?.title as string | undefined),
+    link_url: (creative.link_url as string | undefined)
+      || (linkData?.link as string | undefined)
+      || (videoCallToActionValue?.link as string | undefined),
+  };
+};
+
+const toHierarchyItem = (
+  row: Record<string, unknown>,
+  level: AdHierarchyItem['level'],
+  fallbackIdKey: 'campaign_id' | 'adset_id' | 'ad_id',
+  fallbackNameKey: 'campaign_name' | 'adset_name' | 'ad_name',
+  creative?: CreativePreview | null
+): AdHierarchyItem => {
+  const parsed = parseInsightsRow(row);
+
+  return {
+    id: (row[fallbackIdKey] as string | undefined) || '',
+    name: (row[fallbackNameKey] as string | undefined) || 'Без названия',
+    level,
+    ...parsed,
+    creative,
+  };
+};
+
 function parseInsightsRow(d: Record<string, unknown>): AccountInsights {
-  const actions = d.actions as Array<{ action_type: string; value: string }> | undefined;
-  const actionValues = d.action_values as Array<{ action_type: string; value: string }> | undefined;
-  const costPerActionType = d.cost_per_action_type as Array<{ action_type: string; value: string }> | undefined;
+  const actions = d.actions as ActionStat[] | undefined;
+  const actionValues = d.action_values as ActionStat[] | undefined;
+  const costPerActionType = d.cost_per_action_type as ActionStat[] | undefined;
   const purchases = parseActions(actions, 'purchase');
   const leads = parseActions(actions, 'lead');
   const messagingConversations = parseActionsByCandidates(actions, messagingActionTypes);
@@ -88,9 +167,9 @@ function parseDailyArray(data: Array<Record<string, unknown>>): DailyData[] {
     spend: parseFloat(d.spend as string || '0'),
     impressions: parseInt(d.impressions as string || '0'),
     clicks: parseInt(d.clicks as string || '0'),
-    purchases: parseActions(d.actions as Array<{ action_type: string; value: string }>, 'purchase'),
-    revenue: parseActions(d.action_values as Array<{ action_type: string; value: string }>, 'purchase'),
-    leads: parseActions(d.actions as Array<{ action_type: string; value: string }>, 'lead'),
+    purchases: parseActions(d.actions as ActionStat[], 'purchase'),
+    revenue: parseActions(d.action_values as ActionStat[], 'purchase'),
+    leads: parseActions(d.actions as ActionStat[], 'lead'),
   }));
 }
 
@@ -108,7 +187,9 @@ export function useFacebookApi() {
   const [accountInsights, setAccountInsights] = useState<AccountInsights | null>(null);
   const [accountDailyData, setAccountDailyData] = useState<DailyData[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
-  const [lastDateRange, setLastDateRange] = useState<DateRange | null>(null);
+  const [lastDateRange, setLastDateRange] = useState<DateRange>(defaultDateRange);
+  const [campaignNodesById, setCampaignNodesById] = useState<Record<string, CampaignNode>>({});
+  const [loadingCampaignTreeId, setLoadingCampaignTreeId] = useState<string | null>(null);
 
   const saveToken = useCallback((t: string) => {
     setToken(t);
@@ -141,6 +222,7 @@ export function useFacebookApi() {
     setSelectedAccount(account);
     setSelectedCampaignId(null);
     setLastDateRange(dateRange);
+    setCampaignNodesById({});
 
     try {
       // Account-level insights
@@ -238,6 +320,69 @@ export function useFacebookApi() {
     setDailyData(accountDailyData);
   }, [accountInsights, accountDailyData]);
 
+  const loadCampaignTree = useCallback(async (campaign: CampaignInsight) => {
+    if (!token || !selectedAccount) return;
+    if (campaignNodesById[campaign.campaign_id]) return;
+
+    setLoadingCampaignTreeId(campaign.campaign_id);
+    setError(null);
+
+    try {
+      const sharedFields = 'spend,impressions,reach,frequency,clicks,cpc,cpm,ctr,actions,action_values,cost_per_action_type';
+      const filtering = campaignFilter(campaign.campaign_id);
+      const timeRange = withTimeRange(lastDateRange);
+
+      const adsetsRes = await fetch(
+        `${FB_API_BASE}/${selectedAccount.id}/insights?fields=adset_id,adset_name,${sharedFields}&level=adset&limit=200&filtering=${filtering}&${timeRange}&access_token=${token}`
+      );
+      const adsetsData = await adsetsRes.json();
+      if (adsetsData.error) throw new Error(adsetsData.error.message);
+
+      const adsRes = await fetch(
+        `${FB_API_BASE}/${selectedAccount.id}/insights?fields=ad_id,ad_name,adset_id,${sharedFields}&level=ad&limit=500&filtering=${filtering}&${timeRange}&access_token=${token}`
+      );
+      const adsData = await adsRes.json();
+      if (adsData.error) throw new Error(adsData.error.message);
+
+      const creativesRes = await fetch(
+        `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,creative{id,name,thumbnail_url,image_url,video_id,body,title,link_url,object_story_spec}&limit=500&access_token=${token}`
+      );
+      const creativesData = await creativesRes.json();
+      if (creativesData.error) throw new Error(creativesData.error.message);
+
+      const creativeByAdId = new Map<string, CreativePreview | null>();
+      for (const ad of (creativesData.data || []) as Array<Record<string, unknown>>) {
+        creativeByAdId.set(ad.id as string, parseCreativePreview(ad.creative as Record<string, unknown> | undefined));
+      }
+
+      const adsByAdsetId = new Map<string, AdHierarchyItem[]>();
+      for (const row of (adsData.data || []) as Array<Record<string, unknown>>) {
+        const adsetId = row.adset_id as string | undefined;
+        if (!adsetId) continue;
+        const item = toHierarchyItem(row, 'ad', 'ad_id', 'ad_name', creativeByAdId.get((row.ad_id as string) || '') || null);
+        if (!adsByAdsetId.has(adsetId)) adsByAdsetId.set(adsetId, []);
+        adsByAdsetId.get(adsetId)?.push(item);
+      }
+
+      const node: CampaignNode = {
+        campaign: toHierarchyItem(campaign as unknown as Record<string, unknown>, 'campaign', 'campaign_id', 'campaign_name'),
+        adsets: ((adsetsData.data || []) as Array<Record<string, unknown>>).map((row) => {
+          const adsetId = (row.adset_id as string | undefined) || '';
+          return {
+            adset: toHierarchyItem(row, 'adset', 'adset_id', 'adset_name'),
+            ads: (adsByAdsetId.get(adsetId) || []).sort((a, b) => b.impressions - a.impressions),
+          };
+        }).sort((a, b) => b.adset.impressions - a.adset.impressions),
+      };
+
+      setCampaignNodesById((prev) => ({ ...prev, [campaign.campaign_id]: node }));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to fetch campaign tree');
+    } finally {
+      setLoadingCampaignTreeId(null);
+    }
+  }, [token, selectedAccount, campaignNodesById, lastDateRange]);
+
   const disconnect = useCallback(() => {
     setToken('');
     setAccounts([]);
@@ -248,7 +393,9 @@ export function useFacebookApi() {
     setAccountInsights(null);
     setAccountDailyData([]);
     setSelectedCampaignId(null);
-    setLastDateRange(null);
+    setLastDateRange(defaultDateRange());
+    setCampaignNodesById({});
+    setLoadingCampaignTreeId(null);
     localStorage.removeItem('fb_token');
   }, []);
 
@@ -258,5 +405,9 @@ export function useFacebookApi() {
     loading, error,
     fetchAccounts, fetchInsights, disconnect, setError,
     selectedCampaignId, selectCampaign, clearCampaignSelection,
+    currentDateRange: lastDateRange,
+    campaignNodesById,
+    loadingCampaignTreeId,
+    loadCampaignTree,
   };
 }

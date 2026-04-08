@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DollarSign, Eye, Users, MousePointerClick,
   ShoppingCart, TrendingUp, Target, Layers,
   BarChart3, Zap, Filter, X, ChevronDown, FileDown, Loader2, SlidersHorizontal, GripVertical, MessagesSquare,
+  ChevronRight, Image as ImageIcon, Sparkles, FolderTree, CheckSquare, Square,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -10,7 +11,7 @@ import {
 } from 'recharts';
 import { toPng } from 'html-to-image';
 import { MetricCard } from './MetricCard';
-import type { AccountInsights, CampaignInsight, DailyData, AdAccount } from '../types';
+import type { AccountInsights, CampaignInsight, DailyData, AdAccount, CampaignNode, AdHierarchyItem } from '../types';
 
 type ChartMetricKey = 'purchases' | 'leads' | 'clicks' | 'impressions';
 type MetricKey =
@@ -29,6 +30,17 @@ type MetricKey =
   | 'leads'
   | 'messagingConversations'
   | 'costPerMessagingConversation';
+type BreakdownColumnKey =
+  | 'spend'
+  | 'impressions'
+  | 'frequency'
+  | 'clicks'
+  | 'ctr'
+  | 'cpc'
+  | 'messagingConversations'
+  | 'purchases'
+  | 'purchaseValue'
+  | 'roas';
 type FunnelGoal = 'leads' | 'purchases';
 
 interface DashboardProps {
@@ -39,6 +51,9 @@ interface DashboardProps {
   selectedCampaignId: string | null;
   onSelectCampaign: (campaignId: string) => void;
   onClearCampaign: () => void;
+  campaignNodesById: Record<string, CampaignNode>;
+  loadingCampaignTreeId: string | null;
+  onLoadCampaignTree: (campaign: CampaignInsight) => Promise<void>;
 }
 
 function formatNum(n: number, decimals = 0): string {
@@ -90,6 +105,7 @@ const messagingActionTypes = [
 
 const METRICS_STORAGE_KEY = 'dashboard_visible_metrics';
 const METRIC_ORDER_STORAGE_KEY = 'dashboard_metric_order_by_account';
+const BREAKDOWN_COLUMNS_STORAGE_KEY = 'dashboard_breakdown_visible_columns';
 
 const defaultMetricKeys: MetricKey[] = [
   'spend',
@@ -110,6 +126,19 @@ const defaultMetricKeys: MetricKey[] = [
 ];
 
 const baseMetricKeys: MetricKey[] = ['spend', 'impressions', 'clicks', 'ctr', 'cpc', 'purchases'];
+const defaultBreakdownColumnKeys: BreakdownColumnKey[] = [
+  'spend',
+  'impressions',
+  'frequency',
+  'clicks',
+  'ctr',
+  'cpc',
+  'messagingConversations',
+  'purchases',
+  'purchaseValue',
+  'roas',
+];
+const compactBreakdownColumnKeys: BreakdownColumnKey[] = ['spend', 'impressions', 'clicks', 'ctr', 'purchases', 'roas'];
 
 const moveMetric = (arr: MetricKey[], source: MetricKey, target: MetricKey): MetricKey[] => {
   const sourceIdx = arr.indexOf(source);
@@ -125,6 +154,7 @@ const moveMetric = (arr: MetricKey[], source: MetricKey, target: MetricKey): Met
 export function Dashboard({
   account, insights, campaigns, dailyData,
   selectedCampaignId, onSelectCampaign, onClearCampaign,
+  campaignNodesById, loadingCampaignTreeId, onLoadCampaignTree,
 }: DashboardProps) {
   const [chartMetric, setChartMetric] = useState<ChartMetricKey>('purchases');
   const [showChartDropdown, setShowChartDropdown] = useState(false);
@@ -134,8 +164,14 @@ export function Dashboard({
     return raw === 'purchases' ? 'purchases' : 'leads';
   });
   const [showMetricsDropdown, setShowMetricsDropdown] = useState(false);
+  const [showBreakdownColumnsDropdown, setShowBreakdownColumnsDropdown] = useState(false);
   const [isExportingImage, setIsExportingImage] = useState(false);
   const [draggingMetricKey, setDraggingMetricKey] = useState<MetricKey | null>(null);
+  const [showCampaignHierarchy, setShowCampaignHierarchy] = useState(true);
+  const [showOnlyCampaignsWithImpressions, setShowOnlyCampaignsWithImpressions] = useState(true);
+  const [expandedCampaignIds, setExpandedCampaignIds] = useState<string[]>([]);
+  const [expandedAdsetIds, setExpandedAdsetIds] = useState<string[]>([]);
+  const [creativePreview, setCreativePreview] = useState<AdHierarchyItem | null>(null);
   const [visibleMetricKeys, setVisibleMetricKeys] = useState<MetricKey[]>(() => {
     try {
       const raw = localStorage.getItem(METRICS_STORAGE_KEY);
@@ -145,6 +181,17 @@ export function Dashboard({
       return normalized.length > 0 ? normalized : defaultMetricKeys;
     } catch {
       return defaultMetricKeys;
+    }
+  });
+  const [visibleBreakdownColumns, setVisibleBreakdownColumns] = useState<BreakdownColumnKey[]>(() => {
+    try {
+      const raw = localStorage.getItem(BREAKDOWN_COLUMNS_STORAGE_KEY);
+      if (!raw) return defaultBreakdownColumnKeys;
+      const parsed = JSON.parse(raw) as BreakdownColumnKey[];
+      const normalized = defaultBreakdownColumnKeys.filter((key) => parsed.includes(key));
+      return normalized.length > 0 ? normalized : defaultBreakdownColumnKeys;
+    } catch {
+      return defaultBreakdownColumnKeys;
     }
   });
   const [metricOrderByAccount, setMetricOrderByAccount] = useState<Record<string, MetricKey[]>>(() => {
@@ -171,6 +218,10 @@ export function Dashboard({
   useEffect(() => {
     localStorage.setItem(METRIC_ORDER_STORAGE_KEY, JSON.stringify(metricOrderByAccount));
   }, [metricOrderByAccount]);
+
+  useEffect(() => {
+    localStorage.setItem(BREAKDOWN_COLUMNS_STORAGE_KEY, JSON.stringify(visibleBreakdownColumns));
+  }, [visibleBreakdownColumns]);
 
   useEffect(() => {
     localStorage.setItem('dashboard_funnel_goal', funnelGoal);
@@ -317,6 +368,27 @@ export function Dashboard({
     .map(k => metricMap[k])
     .filter(Boolean);
 
+  const visibleCampaigns = useMemo(() => {
+    return campaigns.filter((campaign) => (
+      showOnlyCampaignsWithImpressions
+        ? parseInt(campaign.impressions || '0') > 0
+        : true
+    ));
+  }, [campaigns, showOnlyCampaignsWithImpressions]);
+
+  const breakdownColumns = useMemo(() => ([
+    { key: 'spend' as BreakdownColumnKey, label: 'Расход' },
+    { key: 'impressions' as BreakdownColumnKey, label: 'Показы' },
+    { key: 'frequency' as BreakdownColumnKey, label: 'Частота' },
+    { key: 'clicks' as BreakdownColumnKey, label: 'Клики' },
+    { key: 'ctr' as BreakdownColumnKey, label: 'CTR' },
+    { key: 'cpc' as BreakdownColumnKey, label: 'CPC' },
+    { key: 'messagingConversations' as BreakdownColumnKey, label: 'Переписки' },
+    { key: 'purchases' as BreakdownColumnKey, label: 'Покупки' },
+    { key: 'purchaseValue' as BreakdownColumnKey, label: 'Ценность' },
+    { key: 'roas' as BreakdownColumnKey, label: 'ROAS' },
+  ]), []);
+
   const tooltipStyle = {
     backgroundColor: '#0d1117',
     border: '1px solid rgba(255,255,255,0.1)',
@@ -341,6 +413,37 @@ export function Dashboard({
 
   const resetMetricOrder = () => {
     setMetricOrderByAccount(prev => ({ ...prev, [account.id]: defaultMetricKeys }));
+  };
+
+  const toggleBreakdownColumn = (columnKey: BreakdownColumnKey) => {
+    const isVisible = visibleBreakdownColumns.includes(columnKey);
+    if (isVisible && visibleBreakdownColumns.length === 1) return;
+    setVisibleBreakdownColumns((prev) => (
+      prev.includes(columnKey)
+        ? prev.filter((key) => key !== columnKey)
+        : [...prev, columnKey]
+    ));
+  };
+
+  const toggleCampaignExpansion = async (campaign: CampaignInsight) => {
+    const isOpen = expandedCampaignIds.includes(campaign.campaign_id);
+    if (isOpen) {
+      setExpandedCampaignIds((prev) => prev.filter((id) => id !== campaign.campaign_id));
+      return;
+    }
+
+    setExpandedCampaignIds((prev) => [...prev, campaign.campaign_id]);
+    if (!campaignNodesById[campaign.campaign_id]) {
+      await onLoadCampaignTree(campaign);
+    }
+  };
+
+  const toggleAdsetExpansion = (adsetId: string) => {
+    setExpandedAdsetIds((prev) => (
+      prev.includes(adsetId)
+        ? prev.filter((id) => id !== adsetId)
+        : [...prev, adsetId]
+    ));
   };
 
   const handleExportImage = async () => {
@@ -405,6 +508,39 @@ export function Dashboard({
   const funnelGoalLabel = funnelGoal === 'leads' ? 'Лиды' : 'Покупки';
   const ctrFromImpressions = insights.impressions > 0 ? (insights.clicks / insights.impressions) * 100 : 0;
   const finalFromClicks = insights.clicks > 0 ? (funnelGoalValue / insights.clicks) * 100 : 0;
+
+  const renderStatCell = (value: string, muted = false) => (
+    <span className={muted ? 'text-gray-500' : 'text-gray-300'}>{value}</span>
+  );
+
+  const renderBreakdownCell = (
+    item: Pick<AdHierarchyItem, 'spend' | 'impressions' | 'frequency' | 'clicks' | 'ctr' | 'cpc' | 'messagingConversations' | 'purchases' | 'purchaseValue' | 'roas'>,
+    columnKey: BreakdownColumnKey,
+    muted = false
+  ) => {
+    switch (columnKey) {
+      case 'spend':
+        return renderStatCell(formatMoney(item.spend), muted);
+      case 'impressions':
+        return renderStatCell(formatNum(item.impressions), muted);
+      case 'frequency':
+        return renderStatCell(item.frequency.toFixed(2), muted);
+      case 'clicks':
+        return renderStatCell(formatNum(item.clicks), muted);
+      case 'ctr':
+        return renderStatCell(`${item.ctr.toFixed(2)}%`, muted);
+      case 'cpc':
+        return renderStatCell(formatMoney(item.cpc), muted);
+      case 'messagingConversations':
+        return renderStatCell(formatNum(item.messagingConversations), muted);
+      case 'purchases':
+        return renderStatCell(formatNum(item.purchases), muted);
+      case 'purchaseValue':
+        return renderStatCell(formatMoney(item.purchaseValue), muted);
+      case 'roas':
+        return renderStatCell(`${item.roas.toFixed(2)}x`, muted);
+    }
+  };
 
   return (
     <div ref={dashboardRef} className="max-w-[1600px] mx-auto px-6 py-8 space-y-8 animate-dashboard-enter">
@@ -710,80 +846,299 @@ export function Dashboard({
       {campaigns.length > 0 && (
         <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">Кампании</h3>
-            <p className="text-xs text-gray-500">Нажмите на кампанию для фильтрации дашборда</p>
+            <div>
+              <h3 className="text-lg font-semibold text-white">Кампании и структура</h3>
+              <p className="text-xs text-gray-500 mt-1">Можно фильтровать дашборд по кампании, раскрывать ad set/ad и смотреть креатив.</p>
+            </div>
+            <div className="flex items-center gap-2" data-export-ignore="true">
+              <div className="relative">
+                <button
+                  onClick={() => setShowBreakdownColumnsDropdown((prev) => !prev)}
+                  className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-300 hover:bg-white/10"
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Колонки
+                </button>
+                {showBreakdownColumnsDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowBreakdownColumnsDropdown(false)} />
+                    <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-white/10 bg-[#0d1117] p-2 shadow-2xl shadow-black/60">
+                      <div className="mb-2 flex items-center gap-2">
+                        <button
+                          onClick={() => setVisibleBreakdownColumns(defaultBreakdownColumnKeys)}
+                          className="rounded-lg border border-white/10 px-2 py-1 text-xs text-gray-300 hover:bg-white/5"
+                        >
+                          Все
+                        </button>
+                        <button
+                          onClick={() => setVisibleBreakdownColumns(compactBreakdownColumnKeys)}
+                          className="rounded-lg border border-white/10 px-2 py-1 text-xs text-gray-300 hover:bg-white/5"
+                        >
+                          Компактно
+                        </button>
+                      </div>
+                      <div className="max-h-64 space-y-1 overflow-y-auto">
+                        {breakdownColumns.map((column) => {
+                          const checked = visibleBreakdownColumns.includes(column.key);
+                          return (
+                            <button
+                              key={column.key}
+                              onClick={() => toggleBreakdownColumn(column.key)}
+                              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-gray-300 hover:bg-white/5"
+                            >
+                              <span className={`h-4 w-4 rounded border ${checked ? 'border-indigo-500 bg-indigo-500/30' : 'border-white/20'}`} />
+                              <span>{column.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+              <button
+                onClick={() => setShowCampaignHierarchy((prev) => !prev)}
+                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-300 hover:bg-white/10"
+              >
+                <FolderTree className="h-4 w-4" />
+                {showCampaignHierarchy ? 'Скрыть блок' : 'Показать блок'}
+              </button>
+              <button
+                onClick={() => setShowOnlyCampaignsWithImpressions((prev) => !prev)}
+                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-300 hover:bg-white/10"
+              >
+                {showOnlyCampaignsWithImpressions ? <CheckSquare className="h-4 w-4 text-indigo-300" /> : <Square className="h-4 w-4 text-gray-500" />}
+                Только с показами
+              </button>
+            </div>
           </div>
+          {showCampaignHierarchy && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/5">
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Кампания</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Расход</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Показы</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Частота</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Клики</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">CTR</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">CPC</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Переписки</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Покупки</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Ценность</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">ROAS</th>
+                  {breakdownColumns
+                    .filter((column) => visibleBreakdownColumns.includes(column.key))
+                    .map((column) => (
+                      <th key={column.key} className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        {column.label}
+                      </th>
+                    ))}
                 </tr>
               </thead>
               <tbody>
-                {campaigns.map((c, i) => {
+                {visibleCampaigns.length === 0 && (
+                  <tr>
+                    <td colSpan={visibleBreakdownColumns.length + 1} className="px-6 py-10 text-center text-sm text-gray-500">
+                      По текущему фильтру кампаний не найдено. Отключи режим "Только с показами", чтобы увидеть всё.
+                    </td>
+                  </tr>
+                )}
+                {visibleCampaigns.map((c, i) => {
                   const spend = parseFloat(c.spend || '0');
                   const purchases = parseActions(c.actions, 'purchase');
                   const messaging = parseActionsByCandidates(c.actions, messagingActionTypes);
                   const purchaseValue = parseActionValues(c.action_values, 'purchase');
                   const roas = spend > 0 ? purchaseValue / spend : 0;
                   const isSelected = selectedCampaignId === c.campaign_id;
+                  const isExpanded = expandedCampaignIds.includes(c.campaign_id);
+                  const node = campaignNodesById[c.campaign_id];
+                  const isLoadingTree = loadingCampaignTreeId === c.campaign_id;
 
                   return (
-                    <tr
-                      key={c.campaign_id || i}
-                      onClick={() => onSelectCampaign(c.campaign_id)}
-                      className={`border-b border-white/5 cursor-pointer transition-all duration-200 ${
-                        isSelected
-                          ? 'bg-indigo-500/10 border-l-[3px] border-l-indigo-500'
-                          : 'hover:bg-white/[0.03] border-l-[3px] border-l-transparent'
-                      }`}
-                    >
-                      <td className="px-6 py-3 max-w-[250px]">
-                        <div className="flex items-center gap-3">
-                          {isSelected && (
-                            <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse shrink-0" />
-                          )}
-                          <span className={`font-medium truncate ${isSelected ? 'text-indigo-300' : 'text-white'}`}>
-                            {c.campaign_name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right text-gray-300">{formatMoney(spend)}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{formatNum(parseInt(c.impressions || '0'))}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{parseFloat(c.frequency || '0').toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{formatNum(parseInt(c.clicks || '0'))}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{parseFloat(c.ctr || '0').toFixed(2)}%</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{formatMoney(parseFloat(c.cpc || '0'))}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{formatNum(messaging)}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{purchases}</td>
-                      <td className="px-4 py-3 text-right text-gray-300">{formatMoney(purchaseValue)}</td>
-                      <td className="px-4 py-3 text-right">
-                        <span className={`inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-medium ${
-                          roas >= 2 ? 'bg-emerald-500/10 text-emerald-400' :
-                          roas >= 1 ? 'bg-amber-500/10 text-amber-400' :
-                          'bg-red-500/10 text-red-400'
-                        }`}>
-                          {roas.toFixed(2)}x
-                        </span>
-                      </td>
-                    </tr>
+                    <Fragment key={c.campaign_id || String(i)}>
+                      <tr
+                        className={`border-b border-white/5 transition-all duration-200 ${
+                          isSelected
+                            ? 'bg-indigo-500/10 border-l-[3px] border-l-indigo-500'
+                            : 'hover:bg-white/[0.03] border-l-[3px] border-l-transparent'
+                        }`}
+                      >
+                        <td className="px-6 py-3 max-w-[250px]">
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => void toggleCampaignExpansion(c)}
+                              className="rounded-md border border-white/10 bg-white/5 p-1 text-gray-300 hover:bg-white/10"
+                            >
+                              {isLoadingTree ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => onSelectCampaign(c.campaign_id)}
+                              className="min-w-0 text-left"
+                            >
+                              <div className="flex items-center gap-3">
+                                {isSelected && (
+                                  <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse shrink-0" />
+                                )}
+                                <span className={`font-medium truncate ${isSelected ? 'text-indigo-300' : 'text-white'}`}>
+                                  {c.campaign_name}
+                                </span>
+                              </div>
+                            </button>
+                          </div>
+                        </td>
+                        {breakdownColumns
+                          .filter((column) => visibleBreakdownColumns.includes(column.key))
+                          .map((column) => (
+                            <td key={column.key} className="px-4 py-3 text-right">
+                              {column.key === 'roas' ? (
+                                <span className={`inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-medium ${
+                                  roas >= 2 ? 'bg-emerald-500/10 text-emerald-400' :
+                                  roas >= 1 ? 'bg-amber-500/10 text-amber-400' :
+                                  'bg-red-500/10 text-red-400'
+                                }`}>
+                                  {roas.toFixed(2)}x
+                                </span>
+                              ) : (
+                                renderBreakdownCell({
+                                  spend,
+                                  impressions: parseInt(c.impressions || '0'),
+                                  frequency: parseFloat(c.frequency || '0'),
+                                  clicks: parseInt(c.clicks || '0'),
+                                  ctr: parseFloat(c.ctr || '0'),
+                                  cpc: parseFloat(c.cpc || '0'),
+                                  messagingConversations: messaging,
+                                  purchases,
+                                  purchaseValue,
+                                  roas,
+                                }, column.key)
+                              )}
+                            </td>
+                          ))}
+                      </tr>
+
+                      {isExpanded && node?.adsets.map(({ adset, ads }) => {
+                        const isAdsetExpanded = expandedAdsetIds.includes(adset.id);
+                        return (
+                          <Fragment key={adset.id}>
+                            <tr key={adset.id} className="border-b border-white/[0.04] bg-white/[0.015]">
+                              <td className="px-6 py-3">
+                                <div className="flex items-center gap-3 pl-7">
+                                  <button
+                                    onClick={() => toggleAdsetExpansion(adset.id)}
+                                    className="rounded-md border border-white/10 bg-white/5 p-1 text-gray-300 hover:bg-white/10"
+                                  >
+                                    <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isAdsetExpanded ? 'rotate-90' : ''}`} />
+                                  </button>
+                                  <span className="truncate text-sm text-gray-200">{adset.name}</span>
+                                </div>
+                              </td>
+                              {breakdownColumns
+                                .filter((column) => visibleBreakdownColumns.includes(column.key))
+                                .map((column) => (
+                                  <td key={column.key} className="px-4 py-3 text-right">
+                                    {renderBreakdownCell(adset, column.key)}
+                                  </td>
+                                ))}
+                            </tr>
+                            {isAdsetExpanded && ads.map((ad) => (
+                              <tr key={ad.id} className="border-b border-white/[0.04] bg-[#0a0f16]">
+                                <td className="px-6 py-3">
+                                  <div className="flex items-center justify-between gap-3 pl-16">
+                                    <span className="truncate text-sm text-gray-300">{ad.name}</span>
+                                    <button
+                                      onClick={() => setCreativePreview(ad)}
+                                      className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10"
+                                    >
+                                      <ImageIcon className="h-3.5 w-3.5" />
+                                      Креатив
+                                    </button>
+                                  </div>
+                                </td>
+                                {breakdownColumns
+                                  .filter((column) => visibleBreakdownColumns.includes(column.key))
+                                  .map((column) => (
+                                    <td key={column.key} className="px-4 py-3 text-right">
+                                      {renderBreakdownCell(ad, column.key, ad.impressions === 0)}
+                                    </td>
+                                  ))}
+                              </tr>
+                            ))}
+                          </Fragment>
+                        );
+                      })}
+                    </Fragment>
                   );
                 })}
               </tbody>
             </table>
           </div>
+          )}
         </div>
+      )}
+
+      {creativePreview && (
+        <>
+          <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm" onClick={() => setCreativePreview(null)} />
+          <div className="fixed inset-x-4 top-1/2 z-[80] mx-auto w-full max-w-3xl -translate-y-1/2 rounded-[28px] border border-white/10 bg-[#0d1117] p-6 shadow-2xl shadow-black/70">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-sm text-indigo-300">
+                  <Sparkles className="h-4 w-4" />
+                  Просмотр креатива
+                </div>
+                <h4 className="mt-2 text-xl font-semibold text-white">{creativePreview.name}</h4>
+              </div>
+              <button
+                onClick={() => setCreativePreview(null)}
+                className="rounded-xl border border-white/10 bg-white/5 p-2 text-gray-300 hover:bg-white/10"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
+              <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+                {creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url ? (
+                  <img
+                    src={creativePreview.creative?.image_url || creativePreview.creative?.thumbnail_url}
+                    alt={creativePreview.name}
+                    className="h-[360px] w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-[360px] items-center justify-center text-sm text-gray-500">
+                    Превью картинки недоступно. Возможно, у объявления только видео или внешний объект.
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-gray-500">Текст</div>
+                  <div className="mt-2 text-sm leading-6 text-gray-200">
+                    {creativePreview.creative?.body || 'Текст креатива не найден в ответе Meta API.'}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-gray-500">Заголовок</div>
+                  <div className="mt-2 text-sm text-white">
+                    {creativePreview.creative?.title || 'Без заголовка'}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-gray-500">Ссылка</div>
+                  {creativePreview.creative?.link_url ? (
+                    <a
+                      href={creativePreview.creative.link_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 block break-all text-sm text-indigo-300 hover:text-indigo-200"
+                    >
+                      {creativePreview.creative.link_url}
+                    </a>
+                  ) : (
+                    <div className="mt-2 text-sm text-gray-500">Ссылка не пришла от API.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
