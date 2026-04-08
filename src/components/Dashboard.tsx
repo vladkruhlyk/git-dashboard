@@ -102,6 +102,10 @@ function getStatusTone(status?: string): string {
   }
 }
 
+function isActiveEntity(status?: string, configuredStatus?: string): boolean {
+  return status === 'ACTIVE' || configuredStatus === 'ACTIVE';
+}
+
 const parseActions = (actions: Array<{ action_type: string; value: string }> | undefined, type: string): number => {
   if (!actions) return 0;
   const found = actions.find(a => a.action_type === type);
@@ -212,6 +216,7 @@ export function Dashboard({
   const [draggingMetricKey, setDraggingMetricKey] = useState<MetricKey | null>(null);
   const [showCampaignHierarchy, setShowCampaignHierarchy] = useState(true);
   const [showOnlyCampaignsWithImpressions, setShowOnlyCampaignsWithImpressions] = useState(true);
+  const [showOnlyActiveEntities, setShowOnlyActiveEntities] = useState(false);
   const [expandedCampaignIds, setExpandedCampaignIds] = useState<string[]>([]);
   const [expandedAdsetIds, setExpandedAdsetIds] = useState<string[]>([]);
   const [creativePreview, setCreativePreview] = useState<AdHierarchyItem | null>(null);
@@ -445,11 +450,14 @@ export function Dashboard({
 
   const visibleCampaigns = useMemo(() => {
     return campaigns.filter((campaign) => (
-      showOnlyCampaignsWithImpressions
+      (showOnlyCampaignsWithImpressions
         ? parseInt(campaign.impressions || '0') > 0
-        : true
+        : true)
+      && (showOnlyActiveEntities
+        ? isActiveEntity(campaign.effective_status, campaign.configured_status)
+        : true)
     ));
-  }, [campaigns, showOnlyCampaignsWithImpressions]);
+  }, [campaigns, showOnlyActiveEntities, showOnlyCampaignsWithImpressions]);
 
   const breakdownColumns = useMemo(() => ([
     { key: 'spend' as BreakdownColumnKey, label: 'Расход' },
@@ -860,6 +868,13 @@ export function Dashboard({
                 {showOnlyCampaignsWithImpressions ? <CheckSquare className="h-4 w-4 text-indigo-300" /> : <Square className="h-4 w-4 text-gray-500" />}
                 Только с показами
               </button>
+              <button
+                onClick={() => setShowOnlyActiveEntities((prev) => !prev)}
+                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-300 hover:bg-white/10"
+              >
+                {showOnlyActiveEntities ? <CheckSquare className="h-4 w-4 text-indigo-300" /> : <Square className="h-4 w-4 text-gray-500" />}
+                Только активные
+              </button>
             </div>
           </div>
           {showCampaignHierarchy && (
@@ -971,7 +986,18 @@ export function Dashboard({
                           ))}
                       </tr>
 
-                      {isExpanded && node?.adsets.map(({ adset, ads }) => {
+                      {isExpanded && node?.adsets
+                        .filter(({ adset }) => (
+                          showOnlyActiveEntities
+                            ? isActiveEntity(adset.effective_status, adset.configured_status)
+                            : true
+                        ))
+                        .map(({ adset, ads }) => {
+                        const visibleAds = ads.filter((ad) => (
+                          showOnlyActiveEntities
+                            ? isActiveEntity(ad.effective_status, ad.configured_status)
+                            : true
+                        ));
                         const isAdsetExpanded = expandedAdsetIds.includes(adset.id);
                         return (
                           <Fragment key={adset.id}>
@@ -998,7 +1024,7 @@ export function Dashboard({
                                   </td>
                                 ))}
                             </tr>
-                            {isAdsetExpanded && ads.map((ad) => (
+                            {isAdsetExpanded && visibleAds.map((ad) => (
                               <tr key={ad.id} className="border-b border-white/[0.04] bg-[#0a0f16]">
                                 <td className="px-6 py-3">
                                   <div className="flex items-center justify-between gap-3 pl-16">
