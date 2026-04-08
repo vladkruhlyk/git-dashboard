@@ -3,7 +3,7 @@ import {
   DollarSign, Eye, Users, MousePointerClick,
   ShoppingCart, TrendingUp, Target, Layers,
   BarChart3, Zap, Filter, X, ChevronDown, FileDown, Loader2, SlidersHorizontal, GripVertical, MessagesSquare,
-  ChevronRight, Image as ImageIcon, Sparkles, FolderTree, CheckSquare, Square,
+  ChevronRight, Image as ImageIcon, Sparkles, FolderTree, CheckSquare, Square, PencilLine,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -258,6 +258,13 @@ export function Dashboard({
   const [creativePreview, setCreativePreview] = useState<AdHierarchyItem | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [entityActionId, setEntityActionId] = useState<string | null>(null);
+  const [budgetEditor, setBudgetEditor] = useState<{
+    id: string;
+    level: 'campaign' | 'adset';
+    name: string;
+    budgetType: 'daily_budget' | 'lifetime_budget';
+    amount: string;
+  } | null>(null);
   const [visibleMetricKeys, setVisibleMetricKeys] = useState<MetricKey[]>(() => {
     try {
       const raw = localStorage.getItem(getMetricsStorageKey(account.id));
@@ -588,6 +595,11 @@ export function Dashboard({
     return parsed / 100;
   };
 
+  const formatStoredBudget = (value?: string) => {
+    const parsed = parseStoredBudget(value);
+    return parsed > 0 ? formatMoney(parsed, account.currency) : 'Не задан';
+  };
+
   const handleToggleStatus = async (item: Pick<AdHierarchyItem, 'id' | 'level' | 'effective_status' | 'configured_status'>) => {
     const nextStatus = isActiveEntity(item.effective_status, item.configured_status) ? 'PAUSED' : 'ACTIVE';
     setEntityActionId(item.id);
@@ -601,23 +613,33 @@ export function Dashboard({
     }
   };
 
-  const handleBudgetChange = async (item: Pick<AdHierarchyItem, 'id' | 'level' | 'daily_budget' | 'lifetime_budget'>) => {
+  const openBudgetEditor = (
+    item: Pick<AdHierarchyItem, 'id' | 'level' | 'name' | 'daily_budget' | 'lifetime_budget'>
+  ) => {
     const budgetType = item.daily_budget ? 'daily_budget' : item.lifetime_budget ? 'lifetime_budget' : 'daily_budget';
     const currentValue = parseStoredBudget(item[budgetType]);
-    const raw = window.prompt(
-      `Новый ${budgetType === 'daily_budget' ? 'дневной' : 'общий'} бюджет в ${account.currency}:`,
-      currentValue > 0 ? currentValue.toFixed(2) : ''
-    );
-    if (raw === null) return;
-    const amount = Number(raw.replace(',', '.'));
+    setExportError(null);
+    setBudgetEditor({
+      id: item.id,
+      level: item.level as 'campaign' | 'adset',
+      name: item.name,
+      budgetType,
+      amount: currentValue > 0 ? currentValue.toFixed(2) : '',
+    });
+  };
+
+  const handleBudgetSave = async () => {
+    if (!budgetEditor) return;
+    const amount = Number(budgetEditor.amount.replace(',', '.'));
     if (!Number.isFinite(amount) || amount <= 0) {
       setExportError('Бюджет должен быть положительным числом.');
       return;
     }
 
-    setEntityActionId(item.id);
+    setEntityActionId(budgetEditor.id);
     try {
-      await onUpdateEntityBudget(item.level as 'campaign' | 'adset', item.id, budgetType, amount);
+      await onUpdateEntityBudget(budgetEditor.level, budgetEditor.id, budgetEditor.budgetType, amount);
+      setBudgetEditor(null);
     } catch (error) {
       console.error(error);
       setExportError(error instanceof Error ? error.message : 'Не удалось обновить бюджет.');
@@ -965,6 +987,7 @@ export function Dashboard({
               <thead>
                 <tr className="border-b border-white/5">
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Кампания</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Бюджет</th>
                   {breakdownColumns
                     .filter((column) => visibleBreakdownColumns.includes(column.key))
                     .map((column) => (
@@ -977,7 +1000,7 @@ export function Dashboard({
               <tbody>
                 {visibleCampaigns.length === 0 && (
                   <tr>
-                    <td colSpan={visibleBreakdownColumns.length + 1} className="px-6 py-10 text-center text-sm text-gray-500">
+                    <td colSpan={visibleBreakdownColumns.length + 2} className="px-6 py-10 text-center text-sm text-gray-500">
                       По текущему фильтру кампаний не найдено. Отключи режим "Только с показами", чтобы увидеть всё.
                     </td>
                   </tr>
@@ -1036,15 +1059,23 @@ export function Dashboard({
                                 loading={entityActionId === c.campaign_id}
                                 onToggle={() => void handleToggleStatus({ id: c.campaign_id, level: 'campaign', effective_status: c.effective_status, configured_status: c.configured_status })}
                               />
-                              {hasEditableBudget(c) && (
-                                <button
-                                  onClick={() => void handleBudgetChange({ id: c.campaign_id, level: 'campaign', daily_budget: c.daily_budget, lifetime_budget: c.lifetime_budget })}
-                                  className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
-                                >
-                                  Бюджет
-                                </button>
-                              )}
                             </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm ${hasEditableBudget(c) ? 'text-gray-200' : 'text-gray-500'}`}>
+                              {formatStoredBudget(c.daily_budget || c.lifetime_budget)}
+                            </span>
+                            {hasEditableBudget(c) && (
+                              <button
+                                onClick={() => openBudgetEditor({ id: c.campaign_id, level: 'campaign', name: c.campaign_name, daily_budget: c.daily_budget, lifetime_budget: c.lifetime_budget })}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-300 transition-all hover:bg-white/10 hover:text-white"
+                                title="Изменить бюджет"
+                              >
+                                <PencilLine className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                         {breakdownColumns
@@ -1117,15 +1148,23 @@ export function Dashboard({
                                       loading={entityActionId === adset.id}
                                       onToggle={() => void handleToggleStatus(adset)}
                                     />
-                                    {hasEditableBudget(adset) && (
-                                      <button
-                                        onClick={() => void handleBudgetChange(adset)}
-                                        className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
-                                      >
-                                        Бюджет
-                                      </button>
-                                    )}
                                   </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 align-middle">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-sm ${hasEditableBudget(adset) ? 'text-gray-200' : 'text-gray-500'}`}>
+                                    {formatStoredBudget(adset.daily_budget || adset.lifetime_budget)}
+                                  </span>
+                                  {hasEditableBudget(adset) && (
+                                    <button
+                                      onClick={() => openBudgetEditor(adset)}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-300 transition-all hover:bg-white/10 hover:text-white"
+                                      title="Изменить бюджет"
+                                    >
+                                      <PencilLine className="h-4 w-4" />
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                               {breakdownColumns
@@ -1160,6 +1199,7 @@ export function Dashboard({
                                     </div>
                                   </div>
                                 </td>
+                                <td className="px-4 py-3 align-middle text-gray-500">—</td>
                                 {breakdownColumns
                                   .filter((column) => visibleBreakdownColumns.includes(column.key))
                                   .map((column) => (
@@ -1356,6 +1396,74 @@ export function Dashboard({
           </div>
         </div>
       </div>
+
+      {budgetEditor && (
+        <>
+          <div className="fixed inset-0 z-[72] bg-black/70 backdrop-blur-sm" onClick={() => setBudgetEditor(null)} />
+          <div className="fixed inset-x-4 top-1/2 z-[82] mx-auto w-full max-w-md -translate-y-1/2 overflow-hidden rounded-[28px] border border-white/10 bg-[#0d1117] p-6 shadow-2xl shadow-black/70">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-sm text-indigo-300">
+                  <PencilLine className="h-4 w-4" />
+                  Редактирование бюджета
+                </div>
+                <h4 className="mt-2 text-xl font-semibold text-white">{budgetEditor.name}</h4>
+                <p className="mt-2 text-sm text-gray-400">
+                  {budgetEditor.budgetType === 'daily_budget' ? 'Дневной бюджет' : 'Общий бюджет'} в {account.currency}
+                </p>
+              </div>
+              <button
+                onClick={() => setBudgetEditor(null)}
+                className="rounded-xl border border-white/10 bg-white/5 p-2 text-gray-300 hover:bg-white/10"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <label className="block text-xs uppercase tracking-[0.18em] text-gray-500">
+                Новый бюджет
+              </label>
+              <div className="mt-3 flex items-center rounded-2xl border border-white/10 bg-[#080d14] px-4 py-3 transition-all focus-within:border-indigo-400/40 focus-within:bg-white/[0.04]">
+                <input
+                  autoFocus
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={budgetEditor.amount}
+                  onChange={(e) => setBudgetEditor((prev) => (prev ? { ...prev, amount: e.target.value } : prev))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void handleBudgetSave();
+                    }
+                  }}
+                  className="w-full border-0 bg-transparent text-lg font-medium text-white outline-none placeholder:text-gray-500"
+                  placeholder="Например, 150.00"
+                />
+                <span className="ml-3 text-sm font-medium text-indigo-300">{account.currency}</span>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setBudgetEditor(null)}
+                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-gray-300 transition-all hover:bg-white/10"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => void handleBudgetSave()}
+                disabled={entityActionId === budgetEditor.id}
+                className="inline-flex min-w-[140px] items-center justify-center gap-2 rounded-2xl border border-indigo-400/20 bg-indigo-500/15 px-4 py-2.5 text-sm font-medium text-indigo-200 transition-all hover:bg-indigo-500/20 disabled:cursor-wait disabled:opacity-70"
+              >
+                {entityActionId === budgetEditor.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <PencilLine className="h-4 w-4" />}
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {creativePreview && (
         <>
