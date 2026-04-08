@@ -186,7 +186,8 @@ export function Dashboard({
     try {
       const raw = localStorage.getItem(METRICS_STORAGE_KEY);
       if (!raw) return defaultMetricKeys;
-      const parsed = JSON.parse(raw) as MetricKey[];
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return defaultMetricKeys;
       const normalized = defaultMetricKeys.filter(k => parsed.includes(k));
       return normalized.length > 0 ? normalized : defaultMetricKeys;
     } catch {
@@ -197,7 +198,8 @@ export function Dashboard({
     try {
       const raw = localStorage.getItem(BREAKDOWN_COLUMNS_STORAGE_KEY);
       if (!raw) return defaultBreakdownColumnKeys;
-      const parsed = JSON.parse(raw) as BreakdownColumnKey[];
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return defaultBreakdownColumnKeys;
       const normalized = defaultBreakdownColumnKeys.filter((key) => parsed.includes(key));
       return normalized.length > 0 ? normalized : defaultBreakdownColumnKeys;
     } catch {
@@ -207,7 +209,9 @@ export function Dashboard({
   const [metricOrderByAccount, setMetricOrderByAccount] = useState<Record<string, MetricKey[]>>(() => {
     try {
       const raw = localStorage.getItem(METRIC_ORDER_STORAGE_KEY);
-      return raw ? JSON.parse(raw) as Record<string, MetricKey[]> : {};
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as unknown;
+      return parsed && typeof parsed === 'object' ? parsed as Record<string, MetricKey[]> : {};
     } catch {
       return {};
     }

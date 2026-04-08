@@ -21,7 +21,9 @@ export function App() {
   const [visibleAccountIds, setVisibleAccountIds] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem(VISIBLE_ACCOUNTS_STORAGE_KEY);
-      return raw ? JSON.parse(raw) as string[] : [];
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : [];
     } catch {
       return [];
     }
