@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DollarSign, Eye, Users, MousePointerClick,
   ShoppingCart, TrendingUp, Target, Layers,
@@ -250,6 +250,12 @@ export function Dashboard({
   const [showBreakdownColumnsDropdown, setShowBreakdownColumnsDropdown] = useState(false);
   const [isExportingImage, setIsExportingImage] = useState(false);
   const [draggingMetricKey, setDraggingMetricKey] = useState<MetricKey | null>(null);
+  const [dropTargetKey, setDropTargetKey] = useState<MetricKey | null>(null);
+  const [ghostPos, setGhostPos] = useState<{ x: number; y: number } | null>(null);
+  const [ghostSize, setGhostSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  const dragSourceRef = useRef<MetricKey | null>(null);
+  const dropTargetRef = useRef<MetricKey | null>(null);
+  const metricGridRef = useRef<HTMLDivElement>(null);
   const [showCampaignHierarchy, setShowCampaignHierarchy] = useState(true);
   const [showOnlyCampaignsWithImpressions, setShowOnlyCampaignsWithImpressions] = useState(true);
   const [showOnlyActiveEntities, setShowOnlyActiveEntities] = useState(false);
@@ -546,6 +552,67 @@ export function Dashboard({
 
   const resetMetricOrder = () => {
     setMetricOrderByAccount(prev => ({ ...prev, [account.id]: defaultMetricKeys }));
+  };
+
+  const handleMetricPointerDown = (e: React.PointerEvent, key: MetricKey) => {
+    if (e.button !== 0) return;
+    const card = (e.currentTarget as HTMLElement).closest('[data-metric-key]') as HTMLElement | null;
+    if (!card) return;
+    e.preventDefault();
+    const rect = card.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let started = false;
+    setGhostSize({ w: rect.width, h: rect.height });
+    dragSourceRef.current = key;
+    dropTargetRef.current = null;
+
+    const onPointerMove = (ev: PointerEvent) => {
+      const dx = Math.abs(ev.clientX - startX);
+      const dy = Math.abs(ev.clientY - startY);
+
+      if (!started && (dx > 4 || dy > 4)) {
+        started = true;
+        setDraggingMetricKey(key);
+      }
+
+      if (started) {
+        setGhostPos({ x: ev.clientX, y: ev.clientY });
+
+        const grid = metricGridRef.current;
+        if (!grid) return;
+        const children = Array.from(grid.children) as HTMLElement[];
+        let found: MetricKey | null = null;
+        for (const child of children) {
+          const r = child.getBoundingClientRect();
+          if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
+            found = (child.dataset.metricKey as MetricKey) || null;
+            break;
+          }
+        }
+        const target = found && found !== key ? found : null;
+        dropTargetRef.current = target;
+        setDropTargetKey(target);
+      }
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      const src = dragSourceRef.current;
+      const tgt = dropTargetRef.current;
+      if (src && tgt) {
+        reorderMetrics(src, tgt);
+      }
+      dragSourceRef.current = null;
+      dropTargetRef.current = null;
+      setDraggingMetricKey(null);
+      setDropTargetKey(null);
+      setGhostPos(null);
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
   };
 
   const toggleBreakdownColumn = (columnKey: BreakdownColumnKey) => {
@@ -883,28 +950,49 @@ export function Dashboard({
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-        {visibleMetrics.map((m, idx) => (
-          <div
-            key={m.key}
-            draggable
-            onDragStart={() => setDraggingMetricKey(m.key)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => {
-              if (draggingMetricKey && draggingMetricKey !== m.key) reorderMetrics(draggingMetricKey, m.key);
-              setDraggingMetricKey(null);
-            }}
-            onDragEnd={() => setDraggingMetricKey(null)}
-            className="group/metric relative animate-fade-up"
-            style={{ animationDelay: `${idx * 50}ms` }}
-          >
-            <div className="absolute top-2 right-2 z-20 opacity-0 group-hover/metric:opacity-100 transition-opacity text-gray-500">
-              <GripVertical className="w-4 h-4" />
+      <div ref={metricGridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+        {visibleMetrics.map((m, idx) => {
+          const isDragging = draggingMetricKey === m.key;
+          const isDropTarget = dropTargetKey === m.key;
+          return (
+            <div
+              key={m.key}
+              data-metric-key={m.key}
+              onPointerDown={(e) => handleMetricPointerDown(e, m.key)}
+              className={`group/metric relative animate-fade-up select-none cursor-grab active:cursor-grabbing transition-all duration-200 ${
+                isDragging ? 'opacity-30 scale-95' : ''
+              } ${isDropTarget ? 'ring-2 ring-indigo-400/60 ring-offset-2 ring-offset-[#060a10] scale-[1.04] rounded-2xl' : ''}`}
+              style={{ animationDelay: `${idx * 50}ms` }}
+            >
+              <div className="absolute top-2 right-2 z-20 opacity-0 group-hover/metric:opacity-100 transition-opacity text-gray-500">
+                <GripVertical className="w-4 h-4" />
+              </div>
+              <MetricCard {...m} />
             </div>
-            <MetricCard {...m} />
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      {/* Floating ghost card while dragging */}
+      {draggingMetricKey && ghostPos && (() => {
+        const m = metricMap[draggingMetricKey];
+        if (!m) return null;
+        return (
+          <div
+            className="pointer-events-none fixed z-[100] transition-none"
+            style={{
+              left: ghostPos.x - ghostSize.w / 2,
+              top: ghostPos.y - ghostSize.h / 2,
+              width: ghostSize.w,
+              height: ghostSize.h,
+            }}
+          >
+            <div className="h-full w-full rounded-2xl border border-indigo-400/40 bg-[#0d1117]/95 backdrop-blur-xl animate-ghost-glow scale-105 rotate-[1.5deg]">
+              <MetricCard {...m} />
+            </div>
+          </div>
+        );
+      })()}
 
       {campaigns.length > 0 && (
         <div className="overflow-visible rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl animate-section-enter" style={{ animationDelay: '0.15s' }}>
