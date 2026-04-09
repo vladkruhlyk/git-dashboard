@@ -948,21 +948,15 @@ export function Dashboard({
     const delivery = item.delivery_status;
     const effective = item.effective_status;
     const configured = item.configured_status;
-    const primaryStatus = delivery || effective || configured;
-    const showConfigured = !delivery && configured && configured !== effective;
+    const primaryStatus = delivery || configured || effective;
 
-    if (!primaryStatus && !showConfigured) return null;
+    if (!primaryStatus) return null;
 
     return (
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
         {primaryStatus && (
           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${getStatusTone(primaryStatus)}`}>
             {normalizeStatus(primaryStatus)}
-          </span>
-        )}
-        {showConfigured && (
-          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${getStatusTone(configured)}`}>
-            set: {normalizeStatus(configured)}
           </span>
         )}
       </div>
