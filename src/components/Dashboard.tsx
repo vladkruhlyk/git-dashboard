@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   DollarSign, Eye, Users, MousePointerClick,
   ShoppingCart, TrendingUp, Target, Layers,
@@ -50,6 +50,7 @@ type BreakdownColumnKey =
   | 'purchaseValue'
   | 'roas';
 type FunnelGoal = 'leads' | 'purchases';
+type ColumnWidthKey = 'campaign' | 'budget' | BreakdownColumnKey;
 
 interface DashboardProps {
   account: AdAccount;
@@ -238,6 +239,7 @@ const messagingActionTypes = [
 const getMetricsStorageKey = (accountId: string) => `dashboard_visible_metrics:${accountId}`;
 const getMetricOrderStorageKey = (accountId: string) => `dashboard_metric_order:${accountId}`;
 const getBreakdownColumnsStorageKey = (accountId: string) => `dashboard_breakdown_visible_columns:${accountId}`;
+const getColumnWidthsStorageKey = (accountId: string) => `dashboard_breakdown_column_widths:${accountId}`;
 
 const defaultMetricKeys: MetricKey[] = [
   'spend',
@@ -279,6 +281,27 @@ const defaultBreakdownColumnKeys: BreakdownColumnKey[] = [
   'roas',
 ];
 const compactBreakdownColumnKeys: BreakdownColumnKey[] = ['spend', 'endDate', 'impressions', 'clicks', 'ctr', 'leads', 'purchases', 'roas'];
+const defaultColumnWidths: Record<ColumnWidthKey, number> = {
+  campaign: 340,
+  budget: 180,
+  spend: 140,
+  endDate: 150,
+  impressions: 120,
+  reach: 120,
+  frequency: 110,
+  clicks: 100,
+  ctr: 100,
+  cpc: 120,
+  cpm: 120,
+  leads: 100,
+  costPerLead: 150,
+  messagingConversations: 120,
+  costPerMessagingConversation: 150,
+  purchases: 110,
+  costPerPurchase: 150,
+  purchaseValue: 140,
+  roas: 100,
+};
 
 const moveMetric = (arr: MetricKey[], source: MetricKey, target: MetricKey): MetricKey[] => {
   const sourceIdx = arr.indexOf(source);
@@ -365,6 +388,21 @@ export function Dashboard({
       return { [account.id]: defaultMetricKeys };
     }
   });
+  const [columnWidths, setColumnWidths] = useState<Record<ColumnWidthKey, number>>(() => {
+    try {
+      const raw = localStorage.getItem(getColumnWidthsStorageKey(account.id));
+      if (!raw) return defaultColumnWidths;
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      return {
+        ...defaultColumnWidths,
+        ...Object.fromEntries(
+          Object.entries(parsed || {}).filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+        ),
+      } as Record<ColumnWidthKey, number>;
+    } catch {
+      return defaultColumnWidths;
+    }
+  });
   const [exportError, setExportError] = useState<string | null>(null);
   const dashboardRef = useRef<HTMLDivElement>(null);
 
@@ -388,6 +426,29 @@ export function Dashboard({
   useEffect(() => {
     localStorage.setItem(getBreakdownColumnsStorageKey(account.id), JSON.stringify(visibleBreakdownColumns));
   }, [account.id, visibleBreakdownColumns]);
+
+  useEffect(() => {
+    localStorage.setItem(getColumnWidthsStorageKey(account.id), JSON.stringify(columnWidths));
+  }, [account.id, columnWidths]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(getColumnWidthsStorageKey(account.id));
+      if (!raw) {
+        setColumnWidths(defaultColumnWidths);
+        return;
+      }
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      setColumnWidths({
+        ...defaultColumnWidths,
+        ...Object.fromEntries(
+          Object.entries(parsed || {}).filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+        ),
+      } as Record<ColumnWidthKey, number>);
+    } catch {
+      setColumnWidths(defaultColumnWidths);
+    }
+  }, [account.id]);
 
   useEffect(() => {
     localStorage.setItem('dashboard_funnel_goal', funnelGoal);
@@ -728,6 +789,30 @@ export function Dashboard({
   const formatStoredBudget = (value?: string) => {
     const parsed = parseStoredBudget(value);
     return parsed > 0 ? formatMoney(parsed, account.currency) : 'Не задан';
+  };
+
+  const getColumnWidth = (columnKey: ColumnWidthKey) => columnWidths[columnKey] || defaultColumnWidths[columnKey];
+
+  const handleColumnResizeStart = (columnKey: ColumnWidthKey, event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = event.clientX;
+    const startWidth = getColumnWidth(columnKey);
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const nextWidth = Math.max(88, Math.min(640, startWidth + delta));
+      setColumnWidths((prev) => ({ ...prev, [columnKey]: nextWidth }));
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
   };
 
   const formatEndDate = (value?: string) => {
@@ -1159,16 +1244,54 @@ export function Dashboard({
           </div>
           {showCampaignHierarchy && (
           <div className="overflow-x-auto overflow-y-visible">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm table-fixed">
               <thead>
                 <tr className="border-b border-white/5">
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Кампания</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Бюджет</th>
+                  <th
+                    className="relative text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider"
+                    style={{ width: getColumnWidth('campaign'), minWidth: getColumnWidth('campaign') }}
+                  >
+                    Кампания
+                    <button
+                      type="button"
+                      onMouseDown={(event) => handleColumnResizeStart('campaign', event)}
+                      className="absolute right-0 top-0 h-full w-3 cursor-col-resize opacity-0 transition-opacity hover:opacity-100 focus:opacity-100"
+                      title="Изменить ширину столбца"
+                    >
+                      <span className="absolute right-1 top-1/2 h-8 w-px -translate-y-1/2 bg-white/20" />
+                    </button>
+                  </th>
+                  <th
+                    className="relative text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider"
+                    style={{ width: getColumnWidth('budget'), minWidth: getColumnWidth('budget') }}
+                  >
+                    Бюджет
+                    <button
+                      type="button"
+                      onMouseDown={(event) => handleColumnResizeStart('budget', event)}
+                      className="absolute right-0 top-0 h-full w-3 cursor-col-resize opacity-0 transition-opacity hover:opacity-100 focus:opacity-100"
+                      title="Изменить ширину столбца"
+                    >
+                      <span className="absolute right-1 top-1/2 h-8 w-px -translate-y-1/2 bg-white/20" />
+                    </button>
+                  </th>
                   {breakdownColumns
                     .filter((column) => visibleBreakdownColumns.includes(column.key))
                     .map((column) => (
-                      <th key={column.key} className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      <th
+                        key={column.key}
+                        className="relative text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider"
+                        style={{ width: getColumnWidth(column.key), minWidth: getColumnWidth(column.key) }}
+                      >
                         {column.label}
+                        <button
+                          type="button"
+                          onMouseDown={(event) => handleColumnResizeStart(column.key, event)}
+                          className="absolute right-0 top-0 h-full w-3 cursor-col-resize opacity-0 transition-opacity hover:opacity-100 focus:opacity-100"
+                          title="Изменить ширину столбца"
+                        >
+                          <span className="absolute right-1 top-1/2 h-8 w-px -translate-y-1/2 bg-white/20" />
+                        </button>
                       </th>
                     ))}
                 </tr>
@@ -1201,7 +1324,10 @@ export function Dashboard({
                             : 'hover:bg-white/[0.03] border-l-[3px] border-l-transparent'
                         }`}
                       >
-                        <td className="px-6 py-3 max-w-[250px]">
+                        <td
+                          className="px-6 py-3"
+                          style={{ width: getColumnWidth('campaign'), minWidth: getColumnWidth('campaign') }}
+                        >
                           <div className="flex items-center gap-3">
                             <button
                               onClick={() => void toggleCampaignExpansion(c)}
@@ -1238,7 +1364,10 @@ export function Dashboard({
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 align-middle">
+                        <td
+                          className="px-4 py-3 align-middle"
+                          style={{ width: getColumnWidth('budget'), minWidth: getColumnWidth('budget') }}
+                        >
                           <div className="flex items-center gap-2">
                             <span className={`text-sm ${hasEditableBudget(c) ? 'text-gray-200' : 'text-gray-500'}`}>
                               {formatStoredBudget(c.daily_budget || c.lifetime_budget)}
@@ -1257,7 +1386,11 @@ export function Dashboard({
                         {breakdownColumns
                           .filter((column) => visibleBreakdownColumns.includes(column.key))
                           .map((column) => (
-                            <td key={column.key} className="px-4 py-3 text-right">
+                            <td
+                              key={column.key}
+                              className="px-4 py-3 text-right"
+                              style={{ width: getColumnWidth(column.key), minWidth: getColumnWidth(column.key) }}
+                            >
                               {column.key === 'roas' ? (
                                 <span className={`inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-medium ${
                                   roas >= 2 ? 'bg-emerald-500/10 text-emerald-400' :
@@ -1307,7 +1440,10 @@ export function Dashboard({
                         return (
                           <Fragment key={adset.id}>
                             <tr key={adset.id} className="border-b border-white/[0.04] bg-white/[0.015]">
-                              <td className="px-6 py-3">
+                              <td
+                                className="px-6 py-3"
+                                style={{ width: getColumnWidth('campaign'), minWidth: getColumnWidth('campaign') }}
+                              >
                                 <div className="flex items-center gap-3 pl-7">
                                   <button
                                     onClick={() => toggleAdsetExpansion(adset.id)}
@@ -1328,7 +1464,10 @@ export function Dashboard({
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-4 py-3 align-middle">
+                              <td
+                                className="px-4 py-3 align-middle"
+                                style={{ width: getColumnWidth('budget'), minWidth: getColumnWidth('budget') }}
+                              >
                                 <div className="flex items-center gap-2">
                                   <span className={`text-sm ${hasEditableBudget(adset) ? 'text-gray-200' : 'text-gray-500'}`}>
                                     {formatStoredBudget(adset.daily_budget || adset.lifetime_budget)}
@@ -1347,14 +1486,21 @@ export function Dashboard({
                               {breakdownColumns
                                 .filter((column) => visibleBreakdownColumns.includes(column.key))
                                 .map((column) => (
-                                  <td key={column.key} className="px-4 py-3 text-right">
+                                  <td
+                                    key={column.key}
+                                    className="px-4 py-3 text-right"
+                                    style={{ width: getColumnWidth(column.key), minWidth: getColumnWidth(column.key) }}
+                                  >
                                     {renderBreakdownCell(adset, column.key)}
                                   </td>
                                 ))}
                             </tr>
                             {isAdsetExpanded && visibleAds.map((ad) => (
                               <tr key={ad.id} className="border-b border-white/[0.04] bg-[#0a0f16]">
-                                <td className="px-6 py-3">
+                                <td
+                                  className="px-6 py-3"
+                                  style={{ width: getColumnWidth('campaign'), minWidth: getColumnWidth('campaign') }}
+                                >
                                   <div className="flex items-center justify-between gap-3 pl-16">
                                     <div className="min-w-0">
                                       <span className="block truncate text-sm text-gray-300">{ad.name}</span>
@@ -1376,11 +1522,20 @@ export function Dashboard({
                                     </div>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 align-middle text-gray-500">—</td>
+                                <td
+                                  className="px-4 py-3 align-middle text-gray-500"
+                                  style={{ width: getColumnWidth('budget'), minWidth: getColumnWidth('budget') }}
+                                >
+                                  —
+                                </td>
                                 {breakdownColumns
                                   .filter((column) => visibleBreakdownColumns.includes(column.key))
                                   .map((column) => (
-                                    <td key={column.key} className="px-4 py-3 text-right">
+                                    <td
+                                      key={column.key}
+                                      className="px-4 py-3 text-right"
+                                      style={{ width: getColumnWidth(column.key), minWidth: getColumnWidth(column.key) }}
+                                    >
                                       {renderBreakdownCell(ad, column.key, ad.impressions === 0)}
                                     </td>
                                   ))}
