@@ -943,12 +943,11 @@ export function Dashboard({
 
   const renderStatusBadges = (
     item: Pick<AdHierarchyItem, 'delivery_status' | 'effective_status' | 'configured_status'>
-      | Pick<CampaignInsight, 'delivery_status' | 'effective_status' | 'configured_status'>
+      | Pick<CampaignInsight, 'delivery_status' | 'effective_status' | 'configured_status'>,
+    forcedStatus?: string,
+    forcedHint?: string
   ) => {
-    const delivery = item.delivery_status;
-    const effective = item.effective_status;
-    const configured = item.configured_status;
-    const primaryStatus = delivery || configured || effective;
+    const primaryStatus = forcedStatus || item.delivery_status || item.configured_status || item.effective_status;
 
     if (!primaryStatus) return null;
 
@@ -958,6 +957,9 @@ export function Dashboard({
           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${getStatusTone(primaryStatus)}`}>
             {normalizeStatus(primaryStatus)}
           </span>
+        )}
+        {forcedHint && (
+          <span className="text-[11px] text-gray-500">{forcedHint}</span>
         )}
       </div>
     );
@@ -1308,6 +1310,7 @@ export function Dashboard({
                   const isExpanded = expandedCampaignIds.includes(c.campaign_id);
                   const node = campaignNodesById[c.campaign_id];
                   const isLoadingTree = loadingCampaignTreeId === c.campaign_id;
+                  const campaignIsActive = isActiveEntity(c.effective_status, c.configured_status);
 
                   return (
                     <Fragment key={c.campaign_id || String(i)}>
@@ -1425,6 +1428,7 @@ export function Dashboard({
                             : true
                         ))
                         .map(({ adset, ads }) => {
+                        const adsetBlockedByCampaign = !campaignIsActive;
                         const visibleAds = ads.filter((ad) => (
                           showOnlyActiveEntities
                             ? isActiveEntity(ad.effective_status, ad.configured_status)
@@ -1447,7 +1451,11 @@ export function Dashboard({
                                   </button>
                                   <div className="min-w-0">
                                     <span className="block truncate text-sm text-gray-200">{adset.name}</span>
-                                    {renderStatusBadges(adset)}
+                                    {renderStatusBadges(
+                                      adset,
+                                      adsetBlockedByCampaign ? 'PAUSED' : undefined,
+                                      adsetBlockedByCampaign ? 'Кампания выключена' : undefined
+                                    )}
                                   </div>
                                   <div className="ml-auto flex shrink-0 items-center gap-2">
                                     <StatusSwitch
@@ -1489,7 +1497,15 @@ export function Dashboard({
                                   </td>
                                 ))}
                             </tr>
-                            {isAdsetExpanded && visibleAds.map((ad) => (
+                            {isAdsetExpanded && visibleAds.map((ad) => {
+                              const adBlockedByParent = adsetBlockedByCampaign || !isActiveEntity(adset.effective_status, adset.configured_status);
+                              const adBlockedHint = adsetBlockedByCampaign
+                                ? 'Кампания выключена'
+                                : !isActiveEntity(adset.effective_status, adset.configured_status)
+                                  ? 'Группа выключена'
+                                  : undefined;
+
+                              return (
                               <tr key={ad.id} className="border-b border-white/[0.04] bg-[#0a0f16]">
                                 <td
                                   className="px-6 py-3"
@@ -1498,7 +1514,7 @@ export function Dashboard({
                                   <div className="flex items-center justify-between gap-3 pl-16">
                                     <div className="min-w-0">
                                       <span className="block truncate text-sm text-gray-300">{ad.name}</span>
-                                      {renderStatusBadges(ad)}
+                                      {renderStatusBadges(ad, adBlockedByParent ? 'PAUSED' : undefined, adBlockedHint)}
                                     </div>
                                     <div className="flex shrink-0 items-center gap-2">
                                       <StatusSwitch
@@ -1534,7 +1550,8 @@ export function Dashboard({
                                     </td>
                                   ))}
                               </tr>
-                            ))}
+                              );
+                            })}
                           </Fragment>
                         );
                       })}
