@@ -5,6 +5,7 @@ export interface AdAccount {
   currency: string;
   account_status: number;
   balance?: string;
+  billing_threshold?: string;
   amount_spent?: string;
   disable_reason?: number;
 }

@@ -309,6 +309,7 @@ export function App() {
                 {visibleAccounts.map((account, idx) => {
                   const isActive = selectedAccount?.id === account.id;
                   const balance = parseMoneyLike(account.balance);
+                  const billingThreshold = parseMoneyLike(account.billing_threshold);
                   const billingMeta = getBillingMeta(account.account_status, balance, account.disable_reason);
                   return (
                     <div
@@ -341,11 +342,20 @@ export function App() {
                             <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-medium ${billingMeta.tone}`}>
                               {billingMeta.label}
                             </span>
-                            {billingMeta.label === 'Задолженность' && balance !== null && balance > 0 && (
-                              <span className="text-xs text-rose-300">
-                                {formatCurrencyValue(balance, account.currency)}
+                          </div>
+                          <div className="mt-3 space-y-2">
+                            <div className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2">
+                              <span className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Задолженность</span>
+                              <span className={`text-sm font-medium ${balance !== null && balance > 0 ? 'text-rose-300' : 'text-gray-300'}`}>
+                                {balance !== null && balance > 0 ? formatCurrencyValue(balance, account.currency) : formatCurrencyValue(0, account.currency)}
                               </span>
-                            )}
+                            </div>
+                            <div className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2">
+                              <span className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Порог оплаты</span>
+                              <span className={`text-sm font-medium ${billingThreshold !== null ? 'text-gray-200' : 'text-gray-500'}`}>
+                                {billingThreshold !== null ? formatCurrencyValue(billingThreshold, account.currency) : 'Нет данных'}
+                              </span>
+                            </div>
                           </div>
                         </button>
                         <div className="flex items-center gap-2">

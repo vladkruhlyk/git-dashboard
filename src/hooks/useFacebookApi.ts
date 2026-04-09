@@ -81,6 +81,27 @@ const chunkArray = <T,>(items: T[], size: number): T[][] => {
   return chunks;
 };
 
+const extractBillingThreshold = (payload: Record<string, unknown>): string | undefined => {
+  const adtrustDsl = payload.adtrust_dsl as Record<string, unknown> | undefined;
+  const candidates = [
+    payload.billing_threshold,
+    payload.threshold_amount,
+    payload.max_balance,
+    adtrustDsl?.billing_threshold,
+    adtrustDsl?.threshold_amount,
+    adtrustDsl?.max_balance,
+    adtrustDsl?.account_billing_threshold,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' || typeof candidate === 'number') {
+      return String(candidate);
+    }
+  }
+
+  return undefined;
+};
+
 const parseCreativePreview = (creative: Record<string, unknown> | undefined): CreativePreview | null => {
   if (!creative) return null;
 
@@ -264,7 +285,23 @@ export function useFacebookApi() {
       }
 
       if (data.error) throw new Error(data.error.message);
-      setAccounts(data.data || []);
+
+      const baseAccounts = (data.data || []) as AdAccount[];
+      const enrichedAccounts = await Promise.all(baseAccounts.map(async (account) => {
+        try {
+          const detailRes = await fetch(
+            `${FB_API_BASE}/${account.id}?fields=adtrust_dsl,max_balance&access_token=${tk}`
+          );
+          const detailData = await detailRes.json();
+          if (detailData.error) return account;
+          const billingThreshold = extractBillingThreshold(detailData as Record<string, unknown>);
+          return billingThreshold ? { ...account, billing_threshold: billingThreshold } : account;
+        } catch {
+          return account;
+        }
+      }));
+
+      setAccounts(enrichedAccounts);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to fetch accounts');
     } finally {
