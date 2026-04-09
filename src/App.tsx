@@ -343,19 +343,21 @@ export function App() {
                               {billingMeta.label}
                             </span>
                           </div>
-                          <div className="mt-3 space-y-2">
-                            <div className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2">
-                              <span className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Задолженность</span>
-                              <span className={`text-sm font-medium ${balance !== null && balance > 0 ? 'text-rose-300' : 'text-gray-300'}`}>
-                                {balance !== null && balance > 0 ? formatCurrencyValue(balance, account.currency) : formatCurrencyValue(0, account.currency)}
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-xs text-gray-300">
+                              <span className="uppercase tracking-[0.18em] text-gray-500">Задолженность</span>
+                              <span className={balance !== null && balance > 0 ? 'font-medium text-rose-300' : 'font-medium text-gray-300'}>
+                                {formatCurrencyValue(balance !== null && balance > 0 ? balance : 0, account.currency)}
                               </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2">
-                              <span className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Порог оплаты</span>
-                              <span className={`text-sm font-medium ${billingThreshold !== null ? 'text-gray-200' : 'text-gray-500'}`}>
-                                {billingThreshold !== null ? formatCurrencyValue(billingThreshold, account.currency) : 'Нет данных'}
+                            </span>
+                            {billingThreshold !== null && (
+                              <span className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-xs text-gray-300">
+                                <span className="uppercase tracking-[0.18em] text-gray-500">Порог</span>
+                                <span className="font-medium text-gray-200">
+                                  {formatCurrencyValue(billingThreshold, account.currency)}
+                                </span>
                               </span>
-                            </div>
+                            )}
                           </div>
                         </button>
                         <div className="flex items-center gap-2">

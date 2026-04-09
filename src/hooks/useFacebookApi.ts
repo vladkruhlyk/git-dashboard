@@ -82,8 +82,12 @@ const chunkArray = <T,>(items: T[], size: number): T[][] => {
 };
 
 const extractBillingThreshold = (payload: Record<string, unknown>): string | undefined => {
+  const adspaymentcycle = payload.adspaymentcycle as Record<string, unknown> | undefined;
   const adtrustDsl = payload.adtrust_dsl as Record<string, unknown> | undefined;
   const candidates = [
+    adspaymentcycle?.threshold_amount,
+    adspaymentcycle?.requested_threshold_amount,
+    adspaymentcycle?.amount,
     payload.billing_threshold,
     payload.threshold_amount,
     payload.max_balance,
@@ -290,7 +294,7 @@ export function useFacebookApi() {
       const enrichedAccounts = await Promise.all(baseAccounts.map(async (account) => {
         try {
           const detailRes = await fetch(
-            `${FB_API_BASE}/${account.id}?fields=adtrust_dsl,max_balance&access_token=${tk}`
+            `${FB_API_BASE}/${account.id}?fields=adspaymentcycle{threshold_amount,requested_threshold_amount,amount,currency,multiplier},adtrust_dsl,max_balance&access_token=${tk}`
           );
           const detailData = await detailRes.json();
           if (detailData.error) return account;
