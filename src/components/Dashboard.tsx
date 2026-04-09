@@ -87,15 +87,55 @@ function formatMoney(n: number, currency = 'USD'): string {
 
 function normalizeStatus(status?: string): string | null {
   if (!status) return null;
-  return status.replace(/_/g, ' ').toLowerCase();
+  const labels: Record<string, string> = {
+    ACTIVE: 'Активно',
+    PAUSED: 'На паузе',
+    ARCHIVED: 'Архив',
+    DELETED: 'Удалено',
+    CAMPAIGN_PAUSED: 'Кампания на паузе',
+    ADSET_PAUSED: 'Группа на паузе',
+    WITH_ISSUES: 'С ошибками',
+    IN_PROCESS: 'Обработка',
+    PROCESSING: 'Обработка',
+    PENDING_REVIEW: 'Проверка',
+    UNDER_REVIEW: 'Проверка',
+    PREAPPROVED: 'Предварительно одобрено',
+    APPROVED: 'Одобрено',
+    DISAPPROVED: 'Отклонено',
+    PENDING_BILLING_INFO: 'Ожидает биллинг',
+    PENDING_SETTLEMENT: 'Ожидает списания',
+    COMPLETED: 'Завершено',
+    FINISHED: 'Завершена',
+    ENDED: 'Завершена',
+    INACTIVE: 'Неактивно',
+  };
+
+  return labels[status] || status.replace(/_/g, ' ').toLowerCase();
 }
 
 function getStatusTone(status?: string): string {
   switch (status) {
     case 'ACTIVE':
+    case 'APPROVED':
+    case 'PREAPPROVED':
       return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300';
     case 'PAUSED':
-      return 'border-amber-500/20 bg-amber-500/10 text-amber-300';
+    case 'CAMPAIGN_PAUSED':
+    case 'ADSET_PAUSED':
+      return 'border-white/10 bg-white/5 text-gray-300';
+    case 'PENDING_REVIEW':
+    case 'UNDER_REVIEW':
+    case 'IN_PROCESS':
+    case 'PROCESSING':
+    case 'PENDING_BILLING_INFO':
+    case 'PENDING_SETTLEMENT':
+      return 'border-sky-500/20 bg-sky-500/10 text-sky-300';
+    case 'WITH_ISSUES':
+    case 'DISAPPROVED':
+    case 'COMPLETED':
+    case 'FINISHED':
+    case 'ENDED':
+    case 'INACTIVE':
     case 'ARCHIVED':
     case 'DELETED':
       return 'border-rose-500/20 bg-rose-500/10 text-rose-300';
