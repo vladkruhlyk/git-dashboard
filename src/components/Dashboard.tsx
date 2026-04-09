@@ -259,6 +259,7 @@ export function Dashboard({
   const [showCampaignHierarchy, setShowCampaignHierarchy] = useState(true);
   const [showOnlyCampaignsWithImpressions, setShowOnlyCampaignsWithImpressions] = useState(true);
   const [showOnlyActiveEntities, setShowOnlyActiveEntities] = useState(false);
+  const [campaignSearch, setCampaignSearch] = useState('');
   const [expandedCampaignIds, setExpandedCampaignIds] = useState<string[]>([]);
   const [expandedAdsetIds, setExpandedAdsetIds] = useState<string[]>([]);
   const [creativePreview, setCreativePreview] = useState<AdHierarchyItem | null>(null);
@@ -499,6 +500,7 @@ export function Dashboard({
     .filter(Boolean);
 
   const visibleCampaigns = useMemo(() => {
+    const normalizedSearch = campaignSearch.trim().toLowerCase();
     return campaigns.filter((campaign) => (
       (showOnlyCampaignsWithImpressions
         ? parseInt(campaign.impressions || '0') > 0
@@ -506,8 +508,11 @@ export function Dashboard({
       && (showOnlyActiveEntities
         ? isActiveEntity(campaign.effective_status, campaign.configured_status)
         : true)
+      && (normalizedSearch
+        ? `${campaign.campaign_name} ${campaign.campaign_id}`.toLowerCase().includes(normalizedSearch)
+        : true)
     ));
-  }, [campaigns, showOnlyActiveEntities, showOnlyCampaignsWithImpressions]);
+  }, [campaignSearch, campaigns, showOnlyActiveEntities, showOnlyCampaignsWithImpressions]);
 
   const breakdownColumns = useMemo(() => ([
     { key: 'spend' as BreakdownColumnKey, label: 'Расход' },
@@ -1002,6 +1007,12 @@ export function Dashboard({
               <p className="text-xs text-gray-500 mt-1">Можно фильтровать дашборд по кампании, раскрывать ad set/ad и смотреть креатив.</p>
             </div>
             <div className="flex items-center gap-2" data-export-ignore="true">
+              <input
+                value={campaignSearch}
+                onChange={(e) => setCampaignSearch(e.target.value)}
+                placeholder="Поиск кампании"
+                className="w-48 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none"
+              />
               <div className="relative">
                 <button
                   onClick={() => setShowBreakdownColumnsDropdown((prev) => !prev)}
@@ -1090,7 +1101,7 @@ export function Dashboard({
                 {visibleCampaigns.length === 0 && (
                   <tr>
                     <td colSpan={visibleBreakdownColumns.length + 2} className="px-6 py-10 text-center text-sm text-gray-500">
-                      По текущему фильтру кампаний не найдено. Отключи режим "Только с показами", чтобы увидеть всё.
+                      По текущему фильтру кампаний ничего не найдено. Проверь поиск или отключи режим "Только с показами".
                     </td>
                   </tr>
                 )}
