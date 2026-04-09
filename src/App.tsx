@@ -9,11 +9,31 @@ const VISIBLE_ACCOUNTS_STORAGE_KEY = 'dashboard_visible_accounts';
 const ACCOUNT_ALIASES_STORAGE_KEY = 'dashboard_account_aliases';
 const ACCOUNT_ORDER_STORAGE_KEY = 'dashboard_account_order';
 
-function parseMoneyLike(value: string | undefined): number | null {
+function getCurrencyFractionDigits(currency: string): number {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+    }).resolvedOptions().maximumFractionDigits;
+  } catch {
+    return 2;
+  }
+}
+
+function parseMoneyLike(value: string | undefined, currency: string): number | null {
   if (!value) return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return null;
-  return Number.isInteger(parsed) && Math.abs(parsed) >= 1000 ? parsed / 100 : parsed;
+
+  if (normalized.includes('.') || normalized.includes(',')) {
+    return parsed;
+  }
+
+  const fractionDigits = getCurrencyFractionDigits(currency);
+  const divisor = 10 ** fractionDigits;
+  return divisor > 1 ? parsed / divisor : parsed;
 }
 
 function formatCurrencyValue(value: number, currency: string): string {
@@ -308,8 +328,8 @@ export function App() {
               <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
                 {visibleAccounts.map((account, idx) => {
                   const isActive = selectedAccount?.id === account.id;
-                  const balance = parseMoneyLike(account.balance);
-                  const billingThreshold = parseMoneyLike(account.billing_threshold);
+                  const balance = parseMoneyLike(account.balance, account.currency);
+                  const billingThreshold = parseMoneyLike(account.billing_threshold, account.currency);
                   const billingMeta = getBillingMeta(account.account_status, balance, account.disable_reason);
                   return (
                     <div
