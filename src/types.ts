@@ -18,6 +18,7 @@ export interface CampaignInsight {
   configured_status?: string;
   daily_budget?: string;
   lifetime_budget?: string;
+  end_date?: string;
   spend: string;
   impressions: string;
   reach: string;
@@ -62,6 +63,7 @@ export interface AdHierarchyItem {
   configured_status?: string;
   daily_budget?: string;
   lifetime_budget?: string;
+  end_date?: string;
   spend: number;
   impressions: number;
   reach: number;

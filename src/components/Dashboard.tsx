@@ -33,6 +33,7 @@ type MetricKey =
   | 'costPerMessagingConversation';
 type BreakdownColumnKey =
   | 'spend'
+  | 'endDate'
   | 'impressions'
   | 'reach'
   | 'frequency'
@@ -260,6 +261,7 @@ const defaultMetricKeys: MetricKey[] = [
 const baseMetricKeys: MetricKey[] = ['spend', 'impressions', 'clicks', 'ctr', 'cpc', 'purchases'];
 const defaultBreakdownColumnKeys: BreakdownColumnKey[] = [
   'spend',
+  'endDate',
   'impressions',
   'reach',
   'frequency',
@@ -276,7 +278,7 @@ const defaultBreakdownColumnKeys: BreakdownColumnKey[] = [
   'purchaseValue',
   'roas',
 ];
-const compactBreakdownColumnKeys: BreakdownColumnKey[] = ['spend', 'impressions', 'clicks', 'ctr', 'leads', 'purchases', 'roas'];
+const compactBreakdownColumnKeys: BreakdownColumnKey[] = ['spend', 'endDate', 'impressions', 'clicks', 'ctr', 'leads', 'purchases', 'roas'];
 
 const moveMetric = (arr: MetricKey[], source: MetricKey, target: MetricKey): MetricKey[] => {
   const sourceIdx = arr.indexOf(source);
@@ -571,6 +573,7 @@ export function Dashboard({
 
   const breakdownColumns = useMemo(() => ([
     { key: 'spend' as BreakdownColumnKey, label: 'Расход' },
+    { key: 'endDate' as BreakdownColumnKey, label: 'Дата завершения' },
     { key: 'impressions' as BreakdownColumnKey, label: 'Показы' },
     { key: 'reach' as BreakdownColumnKey, label: 'Охват' },
     { key: 'frequency' as BreakdownColumnKey, label: 'Частота' },
@@ -727,6 +730,17 @@ export function Dashboard({
     return parsed > 0 ? formatMoney(parsed, account.currency) : 'Не задан';
   };
 
+  const formatEndDate = (value?: string) => {
+    if (!value) return '—';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(parsed);
+  };
+
   const handleToggleStatus = async (item: Pick<AdHierarchyItem, 'id' | 'level' | 'effective_status' | 'configured_status'>) => {
     const nextStatus = isActiveEntity(item.effective_status, item.configured_status) ? 'PAUSED' : 'ACTIVE';
     setEntityActionId(item.id);
@@ -871,13 +885,15 @@ export function Dashboard({
   };
 
   const renderBreakdownCell = (
-    item: Pick<AdHierarchyItem, 'spend' | 'impressions' | 'reach' | 'frequency' | 'clicks' | 'ctr' | 'cpc' | 'cpm' | 'leads' | 'costPerLead' | 'messagingConversations' | 'costPerMessagingConversation' | 'purchases' | 'costPerPurchase' | 'purchaseValue' | 'roas'>,
+    item: Pick<AdHierarchyItem, 'spend' | 'end_date' | 'impressions' | 'reach' | 'frequency' | 'clicks' | 'ctr' | 'cpc' | 'cpm' | 'leads' | 'costPerLead' | 'messagingConversations' | 'costPerMessagingConversation' | 'purchases' | 'costPerPurchase' | 'purchaseValue' | 'roas'>,
     columnKey: BreakdownColumnKey,
     muted = false
   ) => {
     switch (columnKey) {
       case 'spend':
         return renderStatCell(formatMoney(item.spend, account.currency), muted);
+      case 'endDate':
+        return renderStatCell(formatEndDate(item.end_date), muted);
       case 'impressions':
         return renderStatCell(formatNum(item.impressions), muted);
       case 'reach':
@@ -1253,6 +1269,7 @@ export function Dashboard({
                               ) : (
                                 renderBreakdownCell({
                                   spend,
+                                  end_date: c.end_date,
                                   impressions: parseInt(c.impressions || '0'),
                                   reach: parseInt(c.reach || '0'),
                                   frequency: parseFloat(c.frequency || '0'),

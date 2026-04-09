@@ -124,6 +124,22 @@ const extractDeliveryStatus = (payload: Record<string, unknown>): string | undef
   return undefined;
 };
 
+const extractEndDate = (payload: Record<string, unknown>): string | undefined => {
+  const candidates = [
+    payload.stop_time,
+    payload.end_time,
+    payload.ad_schedule_end_time,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+};
+
 const parseCreativePreview = (creative: Record<string, unknown> | undefined): CreativePreview | null => {
   if (!creative) return null;
 
@@ -186,6 +202,7 @@ const toHierarchyItem = (
     name: (row[fallbackNameKey] as string | undefined) || 'Без названия',
     level,
     delivery_status: extractDeliveryStatus(row),
+    end_date: extractEndDate(row),
     effective_status: row.effective_status as string | undefined,
     configured_status: (row.configured_status as string | undefined) || (row.status as string | undefined),
     daily_budget: row.daily_budget as string | undefined,
@@ -365,16 +382,16 @@ export function useFacebookApi() {
       const campaignsData = await campaignsRes.json();
       if (!campaignsData.error) {
         let campaignMetaRes = await fetch(
-          `${FB_API_BASE}/${account.id}/campaigns?fields=id,effective_status,status,daily_budget,lifetime_budget,delivery_info&limit=200&access_token=${token}`
+          `${FB_API_BASE}/${account.id}/campaigns?fields=id,effective_status,status,daily_budget,lifetime_budget,stop_time,delivery_info&limit=200&access_token=${token}`
         );
         let campaignMetaData = await campaignMetaRes.json();
         if (campaignMetaData.error) {
           campaignMetaRes = await fetch(
-            `${FB_API_BASE}/${account.id}/campaigns?fields=id,effective_status,status,daily_budget,lifetime_budget&limit=200&access_token=${token}`
+            `${FB_API_BASE}/${account.id}/campaigns?fields=id,effective_status,status,daily_budget,lifetime_budget,stop_time&limit=200&access_token=${token}`
           );
           campaignMetaData = await campaignMetaRes.json();
         }
-        const campaignStatusById = new Map<string, { delivery_status?: string; effective_status?: string; configured_status?: string; daily_budget?: string; lifetime_budget?: string }>();
+        const campaignStatusById = new Map<string, { delivery_status?: string; effective_status?: string; configured_status?: string; daily_budget?: string; lifetime_budget?: string; end_date?: string }>();
 
         if (!campaignMetaData.error) {
           for (const campaignRow of (campaignMetaData.data || []) as Array<Record<string, unknown>>) {
@@ -386,6 +403,7 @@ export function useFacebookApi() {
               configured_status: campaignRow.status as string | undefined,
               daily_budget: campaignRow.daily_budget as string | undefined,
               lifetime_budget: campaignRow.lifetime_budget as string | undefined,
+              end_date: extractEndDate(campaignRow),
             });
           }
         }
@@ -397,6 +415,7 @@ export function useFacebookApi() {
           configured_status: campaignStatusById.get(campaign.campaign_id)?.configured_status,
           daily_budget: campaignStatusById.get(campaign.campaign_id)?.daily_budget,
           lifetime_budget: campaignStatusById.get(campaign.campaign_id)?.lifetime_budget,
+          end_date: campaignStatusById.get(campaign.campaign_id)?.end_date,
         })));
       }
 
@@ -531,15 +550,15 @@ export function useFacebookApi() {
       const adsetsData = await adsetsRes.json();
       if (adsetsData.error) throw new Error(adsetsData.error.message);
 
-      const adsetStatusById = new Map<string, { delivery_status?: string; effective_status?: string; configured_status?: string; daily_budget?: string; lifetime_budget?: string }>();
+      const adsetStatusById = new Map<string, { delivery_status?: string; effective_status?: string; configured_status?: string; daily_budget?: string; lifetime_budget?: string; end_date?: string }>();
       let adsetsMetaRows: Array<Record<string, unknown>> = [];
       try {
         adsetsMetaRows = await fetchAllPages(
-          `${FB_API_BASE}/${campaign.campaign_id}/adsets?fields=id,effective_status,status,daily_budget,lifetime_budget,delivery_info&limit=100&access_token=${token}`
+          `${FB_API_BASE}/${campaign.campaign_id}/adsets?fields=id,effective_status,status,daily_budget,lifetime_budget,stop_time,delivery_info&limit=100&access_token=${token}`
         );
       } catch {
         adsetsMetaRows = await fetchAllPages(
-          `${FB_API_BASE}/${campaign.campaign_id}/adsets?fields=id,effective_status,status,daily_budget,lifetime_budget&limit=100&access_token=${token}`
+          `${FB_API_BASE}/${campaign.campaign_id}/adsets?fields=id,effective_status,status,daily_budget,lifetime_budget,stop_time&limit=100&access_token=${token}`
         );
       }
       for (const adsetRow of adsetsMetaRows) {
@@ -551,6 +570,7 @@ export function useFacebookApi() {
           configured_status: adsetRow.status as string | undefined,
           daily_budget: adsetRow.daily_budget as string | undefined,
           lifetime_budget: adsetRow.lifetime_budget as string | undefined,
+          end_date: extractEndDate(adsetRow),
         });
       }
 
@@ -563,11 +583,11 @@ export function useFacebookApi() {
       let creativeRows: Array<Record<string, unknown>> = [];
       try {
         creativeRows = await fetchAllPages(
-          `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,effective_status,status,delivery_info,creative{id,name,thumbnail_url,image_url,image_hash,video_id,body,title,link_url,object_story_spec{link_data{picture,image_hash,link,name,message},photo_data{image_hash,url},video_data{image_url,video_id,message,title,call_to_action}}}&limit=100&access_token=${token}`
+          `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,effective_status,status,delivery_info,ad_schedule_end_time,creative{id,name,thumbnail_url,image_url,image_hash,video_id,body,title,link_url,object_story_spec{link_data{picture,image_hash,link,name,message},photo_data{image_hash,url},video_data{image_url,video_id,message,title,call_to_action}}}&limit=100&access_token=${token}`
         );
       } catch {
         creativeRows = await fetchAllPages(
-          `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,effective_status,status,creative{id,name,thumbnail_url,image_url,image_hash,video_id,body,title,link_url,object_story_spec{link_data{picture,image_hash,link,name,message},photo_data{image_hash,url},video_data{image_url,video_id,message,title,call_to_action}}}&limit=100&access_token=${token}`
+          `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,effective_status,status,ad_schedule_end_time,creative{id,name,thumbnail_url,image_url,image_hash,video_id,body,title,link_url,object_story_spec{link_data{picture,image_hash,link,name,message},photo_data{image_hash,url},video_data{image_url,video_id,message,title,call_to_action}}}&limit=100&access_token=${token}`
         );
       }
 
@@ -647,10 +667,11 @@ export function useFacebookApi() {
         const item = toHierarchyItem(
           {
             ...row,
-            delivery_status: extractDeliveryStatus(creativeMeta || {}),
-            effective_status: creativeMeta?.effective_status,
-            status: creativeMeta?.status,
-          },
+              delivery_status: extractDeliveryStatus(creativeMeta || {}),
+              ad_schedule_end_time: creativeMeta?.ad_schedule_end_time,
+              effective_status: creativeMeta?.effective_status,
+              status: creativeMeta?.status,
+            },
           'ad',
           'ad_id',
           'ad_name',
@@ -672,6 +693,7 @@ export function useFacebookApi() {
               status: adsetStatusById.get(adsetId)?.configured_status,
               daily_budget: adsetStatusById.get(adsetId)?.daily_budget,
               lifetime_budget: adsetStatusById.get(adsetId)?.lifetime_budget,
+              stop_time: adsetStatusById.get(adsetId)?.end_date,
             }, 'adset', 'adset_id', 'adset_name'),
             ads: (adsByAdsetId.get(adsetId) || []).sort((a, b) => b.impressions - a.impressions),
           };
