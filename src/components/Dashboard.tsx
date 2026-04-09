@@ -3,7 +3,7 @@ import {
   DollarSign, Eye, Users, MousePointerClick,
   ShoppingCart, TrendingUp, Target, Layers,
   BarChart3, Zap, Filter, X, ChevronDown, FileDown, Loader2, SlidersHorizontal, GripVertical, MessagesSquare,
-  Image as ImageIcon, Sparkles, FolderTree, CheckSquare, Square, PencilLine,
+  ChevronRight, Image as ImageIcon, Sparkles, FolderTree, CheckSquare, Square, PencilLine,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -49,7 +49,6 @@ type BreakdownColumnKey =
   | 'purchaseValue'
   | 'roas';
 type FunnelGoal = 'leads' | 'purchases';
-type StructureTab = 'campaign' | 'adset' | 'ad';
 
 interface DashboardProps {
   account: AdAccount;
@@ -254,11 +253,8 @@ export function Dashboard({
   const [showCampaignHierarchy, setShowCampaignHierarchy] = useState(true);
   const [showOnlyCampaignsWithImpressions, setShowOnlyCampaignsWithImpressions] = useState(true);
   const [showOnlyActiveEntities, setShowOnlyActiveEntities] = useState(false);
-  const [structureTab, setStructureTab] = useState<StructureTab>('campaign');
-  const [selectedAdsetId, setSelectedAdsetId] = useState<string | null>(null);
-  const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>([]);
-  const [selectedAdsetIds, setSelectedAdsetIds] = useState<string[]>([]);
-  const [selectedAdIds, setSelectedAdIds] = useState<string[]>([]);
+  const [expandedCampaignIds, setExpandedCampaignIds] = useState<string[]>([]);
+  const [expandedAdsetIds, setExpandedAdsetIds] = useState<string[]>([]);
   const [creativePreview, setCreativePreview] = useState<AdHierarchyItem | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [entityActionId, setEntityActionId] = useState<string | null>(null);
@@ -332,24 +328,6 @@ export function Dashboard({
   useEffect(() => {
     localStorage.setItem('dashboard_funnel_goal', funnelGoal);
   }, [funnelGoal]);
-
-  useEffect(() => {
-    if (!selectedCampaignId) {
-      setSelectedAdsetId(null);
-      return;
-    }
-
-    if (structureTab !== 'campaign' && selectedCampaign && !campaignNodesById[selectedCampaignId]) {
-      void onLoadCampaignTree(selectedCampaign);
-    }
-  }, [campaignNodesById, onLoadCampaignTree, selectedCampaign, selectedCampaignId, structureTab]);
-
-  useEffect(() => {
-    if (!selectedAdsetId) return;
-    if (!visibleAdsets.some((adset) => adset.id === selectedAdsetId)) {
-      setSelectedAdsetId(null);
-    }
-  }, [selectedAdsetId, visibleAdsets]);
 
   useEffect(() => {
     if (!creativePreview) return;
@@ -525,35 +503,6 @@ export function Dashboard({
     ));
   }, [campaigns, showOnlyActiveEntities, showOnlyCampaignsWithImpressions]);
 
-  const selectedCampaign = useMemo(
-    () => visibleCampaigns.find((campaign) => campaign.campaign_id === selectedCampaignId) || null,
-    [selectedCampaignId, visibleCampaigns]
-  );
-
-  const selectedCampaignNode = selectedCampaignId ? campaignNodesById[selectedCampaignId] : undefined;
-
-  const visibleAdsets = useMemo(() => {
-    if (!selectedCampaignNode) return [];
-    return selectedCampaignNode.adsets
-      .filter(({ adset }) => (
-        showOnlyActiveEntities
-          ? isActiveEntity(adset.effective_status, adset.configured_status)
-          : true
-      ))
-      .map(({ adset }) => adset);
-  }, [selectedCampaignNode, showOnlyActiveEntities]);
-
-  const visibleAds = useMemo(() => {
-    if (!selectedCampaignNode || !selectedAdsetId) return [];
-    const group = selectedCampaignNode.adsets.find(({ adset }) => adset.id === selectedAdsetId);
-    if (!group) return [];
-    return group.ads.filter((ad) => (
-      showOnlyActiveEntities
-        ? isActiveEntity(ad.effective_status, ad.configured_status)
-        : true
-    ));
-  }, [selectedCampaignNode, selectedAdsetId, showOnlyActiveEntities]);
-
   const breakdownColumns = useMemo(() => ([
     { key: 'spend' as BreakdownColumnKey, label: 'Расход' },
     { key: 'impressions' as BreakdownColumnKey, label: 'Показы' },
@@ -606,6 +555,27 @@ export function Dashboard({
       prev.includes(columnKey)
         ? prev.filter((key) => key !== columnKey)
         : [...prev, columnKey]
+    ));
+  };
+
+  const toggleCampaignExpansion = async (campaign: CampaignInsight) => {
+    const isOpen = expandedCampaignIds.includes(campaign.campaign_id);
+    if (isOpen) {
+      setExpandedCampaignIds((prev) => prev.filter((id) => id !== campaign.campaign_id));
+      return;
+    }
+
+    setExpandedCampaignIds((prev) => [...prev, campaign.campaign_id]);
+    if (!campaignNodesById[campaign.campaign_id]) {
+      await onLoadCampaignTree(campaign);
+    }
+  };
+
+  const toggleAdsetExpansion = (adsetId: string) => {
+    setExpandedAdsetIds((prev) => (
+      prev.includes(adsetId)
+        ? prev.filter((id) => id !== adsetId)
+        : [...prev, adsetId]
     ));
   };
 
@@ -809,46 +779,6 @@ export function Dashboard({
     }
   };
 
-  const toggleSelection = (
-    setIds: (value: string[] | ((prev: string[]) => string[])) => void,
-    id: string
-  ) => {
-    setIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
-  };
-
-  const toggleSelectAll = (
-    allIds: string[],
-    selectedIds: string[],
-    setIds: (value: string[] | ((prev: string[]) => string[])) => void
-  ) => {
-    setIds(() => (selectedIds.length === allIds.length ? [] : allIds));
-  };
-
-  const renderSelectionCheckbox = (checked: boolean, onClick: () => void) => (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex h-5 w-5 items-center justify-center rounded-md border transition-all ${
-        checked ? 'border-indigo-400 bg-indigo-500/20 text-indigo-200' : 'border-white/15 bg-white/[0.03] text-transparent hover:border-white/30'
-      }`}
-    >
-      <CheckSquare className="h-3.5 w-3.5" />
-    </button>
-  );
-
-  const structureTabs: Array<{ key: StructureTab; label: string }> = [
-    { key: 'campaign', label: 'Кампании' },
-    { key: 'adset', label: 'Группы объявлений' },
-    { key: 'ad', label: 'Объявления' },
-  ];
-
-  const structureColumnLabel =
-    structureTab === 'campaign'
-      ? 'Кампания'
-      : structureTab === 'adset'
-        ? 'Группа объявлений'
-        : 'Объявление';
-
   return (
     <div ref={dashboardRef} className="max-w-[1600px] mx-auto px-6 py-8 space-y-8 animate-dashboard-enter">
       <div className="flex items-center justify-between">
@@ -980,7 +910,7 @@ export function Dashboard({
           <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold text-white">Кампании и структура</h3>
-              <p className="text-xs text-gray-500 mt-1">Сверху уровни как в Ads Manager: кампании, группы объявлений и объявления.</p>
+              <p className="text-xs text-gray-500 mt-1">Можно фильтровать дашборд по кампании, раскрывать ad set/ad и смотреть креатив.</p>
             </div>
             <div className="flex items-center gap-2" data-export-ignore="true">
               <div className="relative">
@@ -1052,218 +982,94 @@ export function Dashboard({
             </div>
           </div>
           {showCampaignHierarchy && (
-            <>
-              <div className="border-b border-white/5 px-6 pt-4">
-                <div className="flex flex-wrap gap-2">
-                  {structureTabs.map((tab) => {
-                    const count = tab.key === 'campaign'
-                      ? visibleCampaigns.length
-                      : tab.key === 'adset'
-                        ? visibleAdsets.length
-                        : visibleAds.length;
-                    return (
-                      <button
-                        key={tab.key}
-                        onClick={() => setStructureTab(tab.key)}
-                        className={`inline-flex items-center gap-2 rounded-t-2xl border px-4 py-3 text-sm font-medium transition-all ${
-                          structureTab === tab.key
-                            ? 'border-white/10 border-b-[#0d1117] bg-white/5 text-white'
-                            : 'border-transparent bg-transparent text-gray-500 hover:text-gray-300'
+          <div className="overflow-x-auto overflow-y-visible">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/5">
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Кампания</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Бюджет</th>
+                  {breakdownColumns
+                    .filter((column) => visibleBreakdownColumns.includes(column.key))
+                    .map((column) => (
+                      <th key={column.key} className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        {column.label}
+                      </th>
+                    ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleCampaigns.length === 0 && (
+                  <tr>
+                    <td colSpan={visibleBreakdownColumns.length + 2} className="px-6 py-10 text-center text-sm text-gray-500">
+                      По текущему фильтру кампаний не найдено. Отключи режим "Только с показами", чтобы увидеть всё.
+                    </td>
+                  </tr>
+                )}
+                {visibleCampaigns.map((c, i) => {
+                  const spend = parseFloat(c.spend || '0');
+                  const purchases = parseActions(c.actions, 'purchase');
+                  const messaging = parseActionsByCandidates(c.actions, messagingActionTypes);
+                  const purchaseValue = parseActionValues(c.action_values, 'purchase');
+                  const roas = spend > 0 ? purchaseValue / spend : 0;
+                  const isSelected = selectedCampaignId === c.campaign_id;
+                  const isExpanded = expandedCampaignIds.includes(c.campaign_id);
+                  const node = campaignNodesById[c.campaign_id];
+                  const isLoadingTree = loadingCampaignTreeId === c.campaign_id;
+
+                  return (
+                    <Fragment key={c.campaign_id || String(i)}>
+                      <tr
+                        className={`border-b border-white/5 transition-all duration-200 ${
+                          isSelected
+                            ? 'bg-indigo-500/10 border-l-[3px] border-l-indigo-500'
+                            : 'hover:bg-white/[0.03] border-l-[3px] border-l-transparent'
                         }`}
                       >
-                        <span>{tab.label}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-[11px] ${structureTab === tab.key ? 'bg-indigo-500/20 text-indigo-200' : 'bg-white/5 text-gray-400'}`}>
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="overflow-x-auto overflow-y-visible">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-white/5">
-                      <th className="w-12 px-4 py-3">
-                        {structureTab === 'campaign' && renderSelectionCheckbox(
-                          visibleCampaigns.length > 0 && selectedCampaignIds.length === visibleCampaigns.length,
-                          () => toggleSelectAll(visibleCampaigns.map((campaign) => campaign.campaign_id), selectedCampaignIds, setSelectedCampaignIds)
-                        )}
-                        {structureTab === 'adset' && renderSelectionCheckbox(
-                          visibleAdsets.length > 0 && selectedAdsetIds.length === visibleAdsets.length,
-                          () => toggleSelectAll(visibleAdsets.map((adset) => adset.id), selectedAdsetIds, setSelectedAdsetIds)
-                        )}
-                        {structureTab === 'ad' && renderSelectionCheckbox(
-                          visibleAds.length > 0 && selectedAdIds.length === visibleAds.length,
-                          () => toggleSelectAll(visibleAds.map((ad) => ad.id), selectedAdIds, setSelectedAdIds)
-                        )}
-                      </th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">{structureColumnLabel}</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Бюджет</th>
-                      {breakdownColumns
-                        .filter((column) => visibleBreakdownColumns.includes(column.key))
-                        .map((column) => (
-                          <th key={column.key} className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">
-                            {column.label}
-                          </th>
-                        ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {structureTab === 'campaign' && visibleCampaigns.length === 0 && (
-                      <tr>
-                        <td colSpan={visibleBreakdownColumns.length + 3} className="px-6 py-10 text-center text-sm text-gray-500">
-                          По текущему фильтру кампаний не найдено. Отключи режим "Только с показами", чтобы увидеть всё.
-                        </td>
-                      </tr>
-                    )}
-
-                    {structureTab === 'campaign' && visibleCampaigns.map((c, i) => {
-                      const spend = parseFloat(c.spend || '0');
-                      const purchases = parseActions(c.actions, 'purchase');
-                      const messaging = parseActionsByCandidates(c.actions, messagingActionTypes);
-                      const purchaseValue = parseActionValues(c.action_values, 'purchase');
-                      const roas = spend > 0 ? purchaseValue / spend : 0;
-                      const isSelected = selectedCampaignId === c.campaign_id;
-                      return (
-                        <tr
-                          key={c.campaign_id || String(i)}
-                          className={`border-b border-white/5 transition-all duration-200 ${
-                            isSelected
-                              ? 'bg-indigo-500/10 border-l-[3px] border-l-indigo-500'
-                              : 'hover:bg-white/[0.03] border-l-[3px] border-l-transparent'
-                          }`}
-                        >
-                          <td className="px-4 py-3">
-                            {renderSelectionCheckbox(
-                              selectedCampaignIds.includes(c.campaign_id),
-                              () => toggleSelection(setSelectedCampaignIds, c.campaign_id)
-                            )}
-                          </td>
-                          <td className="px-4 py-3 max-w-[320px]">
-                            <div className="flex items-center gap-3">
+                        <td className="px-6 py-3 max-w-[250px]">
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => void toggleCampaignExpansion(c)}
+                              className="rounded-md border border-white/10 bg-white/5 p-1 text-gray-300 hover:bg-white/10"
+                            >
+                              {isLoadingTree ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => onSelectCampaign(c.campaign_id)}
+                              className="min-w-0 text-left"
+                            >
+                              <div className="flex items-center gap-3">
+                                {isSelected && (
+                                  <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse shrink-0" />
+                                )}
+                                <div className="min-w-0">
+                                  <span className={`block truncate font-medium ${isSelected ? 'text-indigo-300' : 'text-white'}`}>
+                                    {c.campaign_name}
+                                  </span>
+                                  {renderStatusBadges(c)}
+                                </div>
+                              </div>
+                            </button>
+                            <div className="ml-auto flex shrink-0 items-center gap-2">
                               <StatusSwitch
                                 checked={isActiveEntity(c.effective_status, c.configured_status)}
                                 loading={entityActionId === c.campaign_id}
                                 onToggle={() => void handleToggleStatus({ id: c.campaign_id, level: 'campaign', effective_status: c.effective_status, configured_status: c.configured_status })}
                               />
-                              <button
-                                onClick={() => {
-                                  onSelectCampaign(c.campaign_id);
-                                  setSelectedAdsetId(null);
-                                }}
-                                className="min-w-0 text-left"
-                              >
-                                <span className={`block truncate font-medium ${isSelected ? 'text-indigo-300' : 'text-white'}`}>
-                                  {c.campaign_name}
-                                </span>
-                                {renderStatusBadges(c)}
-                              </button>
                             </div>
-                          </td>
-                          <td className="px-4 py-3 align-middle">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-sm ${hasEditableBudget(c) ? 'text-gray-200' : 'text-gray-500'}`}>
-                                {formatStoredBudget(c.daily_budget || c.lifetime_budget)}
-                              </span>
-                              {hasEditableBudget(c) && (
-                                <button
-                                  onClick={() => openBudgetEditor({ id: c.campaign_id, level: 'campaign', name: c.campaign_name, daily_budget: c.daily_budget, lifetime_budget: c.lifetime_budget })}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-300 transition-all hover:bg-white/10 hover:text-white"
-                                  title="Изменить бюджет"
-                                >
-                                  <PencilLine className="h-4 w-4" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                          {breakdownColumns
-                            .filter((column) => visibleBreakdownColumns.includes(column.key))
-                            .map((column) => (
-                              <td key={column.key} className="px-4 py-3 text-right">
-                                {column.key === 'roas' ? (
-                                  <span className={`inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-medium ${
-                                    roas >= 2 ? 'bg-emerald-500/10 text-emerald-400' :
-                                    roas >= 1 ? 'bg-amber-500/10 text-amber-400' :
-                                    'bg-red-500/10 text-red-400'
-                                  }`}>
-                                    {roas.toFixed(2)}x
-                                  </span>
-                                ) : (
-                                  renderBreakdownCell({
-                                    spend,
-                                    impressions: parseInt(c.impressions || '0'),
-                                    reach: parseInt(c.reach || '0'),
-                                    frequency: parseFloat(c.frequency || '0'),
-                                    clicks: parseInt(c.clicks || '0'),
-                                    ctr: parseFloat(c.ctr || '0'),
-                                    cpc: parseFloat(c.cpc || '0'),
-                                    cpm: parseFloat(c.cpm || '0'),
-                                    leads: parseActions(c.actions, 'lead'),
-                                    costPerLead: parseActions(c.actions, 'lead') > 0 ? spend / parseActions(c.actions, 'lead') : 0,
-                                    messagingConversations: messaging,
-                                    costPerMessagingConversation: messaging > 0 ? spend / messaging : 0,
-                                    purchases,
-                                    costPerPurchase: purchases > 0 ? spend / purchases : 0,
-                                    purchaseValue,
-                                    roas,
-                                  }, column.key)
-                                )}
-                              </td>
-                            ))}
-                        </tr>
-                      );
-                    })}
-
-                    {structureTab === 'adset' && !selectedCampaignId && (
-                      <tr>
-                        <td colSpan={visibleBreakdownColumns.length + 3} className="px-6 py-10 text-center text-sm text-gray-500">
-                          Сначала выбери кампанию во вкладке «Кампании», затем открой «Группы объявлений».
-                        </td>
-                      </tr>
-                    )}
-                    {structureTab === 'adset' && selectedCampaignId && visibleAdsets.length === 0 && (
-                      <tr>
-                        <td colSpan={visibleBreakdownColumns.length + 3} className="px-6 py-10 text-center text-sm text-gray-500">
-                          По выбранной кампании группы объявлений не найдены.
-                        </td>
-                      </tr>
-                    )}
-                    {structureTab === 'adset' && visibleAdsets.map((adset) => (
-                      <tr
-                        key={adset.id}
-                        className={`border-b border-white/[0.04] transition-all ${selectedAdsetId === adset.id ? 'bg-indigo-500/10' : 'hover:bg-white/[0.03]'}`}
-                      >
-                        <td className="px-4 py-3">
-                          {renderSelectionCheckbox(
-                            selectedAdsetIds.includes(adset.id),
-                            () => toggleSelection(setSelectedAdsetIds, adset.id)
-                          )}
-                        </td>
-                        <td className="px-4 py-3 max-w-[320px]">
-                          <div className="flex items-center gap-3">
-                            <StatusSwitch
-                              checked={isActiveEntity(adset.effective_status, adset.configured_status)}
-                              loading={entityActionId === adset.id}
-                              onToggle={() => void handleToggleStatus(adset)}
-                            />
-                            <button
-                              onClick={() => setSelectedAdsetId(adset.id)}
-                              className="min-w-0 text-left"
-                            >
-                              <span className={`block truncate font-medium ${selectedAdsetId === adset.id ? 'text-indigo-300' : 'text-gray-200'}`}>{adset.name}</span>
-                              {renderStatusBadges(adset)}
-                            </button>
                           </div>
                         </td>
                         <td className="px-4 py-3 align-middle">
                           <div className="flex items-center gap-2">
-                            <span className={`text-sm ${hasEditableBudget(adset) ? 'text-gray-200' : 'text-gray-500'}`}>
-                              {formatStoredBudget(adset.daily_budget || adset.lifetime_budget)}
+                            <span className={`text-sm ${hasEditableBudget(c) ? 'text-gray-200' : 'text-gray-500'}`}>
+                              {formatStoredBudget(c.daily_budget || c.lifetime_budget)}
                             </span>
-                            {hasEditableBudget(adset) && (
+                            {hasEditableBudget(c) && (
                               <button
-                                onClick={() => openBudgetEditor(adset)}
+                                onClick={() => openBudgetEditor({ id: c.campaign_id, level: 'campaign', name: c.campaign_name, daily_budget: c.daily_budget, lifetime_budget: c.lifetime_budget })}
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-300 transition-all hover:bg-white/10 hover:text-white"
                                 title="Изменить бюджет"
                               >
@@ -1276,70 +1082,142 @@ export function Dashboard({
                           .filter((column) => visibleBreakdownColumns.includes(column.key))
                           .map((column) => (
                             <td key={column.key} className="px-4 py-3 text-right">
-                              {renderBreakdownCell(adset, column.key)}
+                              {column.key === 'roas' ? (
+                                <span className={`inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-medium ${
+                                  roas >= 2 ? 'bg-emerald-500/10 text-emerald-400' :
+                                  roas >= 1 ? 'bg-amber-500/10 text-amber-400' :
+                                  'bg-red-500/10 text-red-400'
+                                }`}>
+                                  {roas.toFixed(2)}x
+                                </span>
+                              ) : (
+                                renderBreakdownCell({
+                                  spend,
+                                  impressions: parseInt(c.impressions || '0'),
+                                  reach: parseInt(c.reach || '0'),
+                                  frequency: parseFloat(c.frequency || '0'),
+                                  clicks: parseInt(c.clicks || '0'),
+                                  ctr: parseFloat(c.ctr || '0'),
+                                  cpc: parseFloat(c.cpc || '0'),
+                                  cpm: parseFloat(c.cpm || '0'),
+                                  leads: parseActions(c.actions, 'lead'),
+                                  costPerLead: parseActions(c.actions, 'lead') > 0 ? spend / parseActions(c.actions, 'lead') : 0,
+                                  messagingConversations: messaging,
+                                  costPerMessagingConversation: messaging > 0 ? spend / messaging : 0,
+                                  purchases,
+                                  costPerPurchase: purchases > 0 ? spend / purchases : 0,
+                                  purchaseValue,
+                                  roas,
+                                }, column.key)
+                              )}
                             </td>
                           ))}
                       </tr>
-                    ))}
 
-                    {structureTab === 'ad' && !selectedAdsetId && (
-                      <tr>
-                        <td colSpan={visibleBreakdownColumns.length + 3} className="px-6 py-10 text-center text-sm text-gray-500">
-                          Сначала выбери группу объявлений во вкладке «Группы объявлений», затем открой «Объявления».
-                        </td>
-                      </tr>
-                    )}
-                    {structureTab === 'ad' && selectedAdsetId && visibleAds.length === 0 && (
-                      <tr>
-                        <td colSpan={visibleBreakdownColumns.length + 3} className="px-6 py-10 text-center text-sm text-gray-500">
-                          По выбранной группе объявления не найдены.
-                        </td>
-                      </tr>
-                    )}
-                    {structureTab === 'ad' && visibleAds.map((ad) => (
-                      <tr key={ad.id} className="border-b border-white/[0.04] bg-[#0a0f16] hover:bg-white/[0.03]">
-                        <td className="px-4 py-3">
-                          {renderSelectionCheckbox(
-                            selectedAdIds.includes(ad.id),
-                            () => toggleSelection(setSelectedAdIds, ad.id)
-                          )}
-                        </td>
-                        <td className="px-4 py-3 max-w-[320px]">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <StatusSwitch
-                                checked={isActiveEntity(ad.effective_status, ad.configured_status)}
-                                loading={entityActionId === ad.id}
-                                onToggle={() => void handleToggleStatus(ad)}
-                              />
-                              <div className="min-w-0">
-                                <span className="block truncate text-sm text-gray-300">{ad.name}</span>
-                                {renderStatusBadges(ad)}
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => void handleOpenCreative(ad)}
-                              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10"
-                            >
-                              <ImageIcon className="h-3.5 w-3.5" />
-                              Креатив
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 align-middle text-gray-500">—</td>
-                        {breakdownColumns
-                          .filter((column) => visibleBreakdownColumns.includes(column.key))
-                          .map((column) => (
-                            <td key={column.key} className="px-4 py-3 text-right">
-                              {renderBreakdownCell(ad, column.key, ad.impressions === 0)}
-                            </td>
-                          ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+                      {isExpanded && node?.adsets
+                        .filter(({ adset }) => (
+                          showOnlyActiveEntities
+                            ? isActiveEntity(adset.effective_status, adset.configured_status)
+                            : true
+                        ))
+                        .map(({ adset, ads }) => {
+                        const visibleAds = ads.filter((ad) => (
+                          showOnlyActiveEntities
+                            ? isActiveEntity(ad.effective_status, ad.configured_status)
+                            : true
+                        ));
+                        const isAdsetExpanded = expandedAdsetIds.includes(adset.id);
+                        return (
+                          <Fragment key={adset.id}>
+                            <tr key={adset.id} className="border-b border-white/[0.04] bg-white/[0.015]">
+                              <td className="px-6 py-3">
+                                <div className="flex items-center gap-3 pl-7">
+                                  <button
+                                    onClick={() => toggleAdsetExpansion(adset.id)}
+                                    className="rounded-md border border-white/10 bg-white/5 p-1 text-gray-300 hover:bg-white/10"
+                                  >
+                                    <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isAdsetExpanded ? 'rotate-90' : ''}`} />
+                                  </button>
+                                  <div className="min-w-0">
+                                    <span className="block truncate text-sm text-gray-200">{adset.name}</span>
+                                    {renderStatusBadges(adset)}
+                                  </div>
+                                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                                    <StatusSwitch
+                                      checked={isActiveEntity(adset.effective_status, adset.configured_status)}
+                                      loading={entityActionId === adset.id}
+                                      onToggle={() => void handleToggleStatus(adset)}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 align-middle">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-sm ${hasEditableBudget(adset) ? 'text-gray-200' : 'text-gray-500'}`}>
+                                    {formatStoredBudget(adset.daily_budget || adset.lifetime_budget)}
+                                  </span>
+                                  {hasEditableBudget(adset) && (
+                                    <button
+                                      onClick={() => openBudgetEditor(adset)}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-300 transition-all hover:bg-white/10 hover:text-white"
+                                      title="Изменить бюджет"
+                                    >
+                                      <PencilLine className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                              {breakdownColumns
+                                .filter((column) => visibleBreakdownColumns.includes(column.key))
+                                .map((column) => (
+                                  <td key={column.key} className="px-4 py-3 text-right">
+                                    {renderBreakdownCell(adset, column.key)}
+                                  </td>
+                                ))}
+                            </tr>
+                            {isAdsetExpanded && visibleAds.map((ad) => (
+                              <tr key={ad.id} className="border-b border-white/[0.04] bg-[#0a0f16]">
+                                <td className="px-6 py-3">
+                                  <div className="flex items-center justify-between gap-3 pl-16">
+                                    <div className="min-w-0">
+                                      <span className="block truncate text-sm text-gray-300">{ad.name}</span>
+                                      {renderStatusBadges(ad)}
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-2">
+                                      <StatusSwitch
+                                        checked={isActiveEntity(ad.effective_status, ad.configured_status)}
+                                        loading={entityActionId === ad.id}
+                                        onToggle={() => void handleToggleStatus(ad)}
+                                      />
+                                      <button
+                                        onClick={() => void handleOpenCreative(ad)}
+                                        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10"
+                                      >
+                                        <ImageIcon className="h-3.5 w-3.5" />
+                                        Креатив
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 align-middle text-gray-500">—</td>
+                                {breakdownColumns
+                                  .filter((column) => visibleBreakdownColumns.includes(column.key))
+                                  .map((column) => (
+                                    <td key={column.key} className="px-4 py-3 text-right">
+                                      {renderBreakdownCell(ad, column.key, ad.impressions === 0)}
+                                    </td>
+                                  ))}
+                              </tr>
+                            ))}
+                          </Fragment>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           )}
         </div>
       )}
