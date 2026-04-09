@@ -13,6 +13,7 @@ export interface AdAccount {
 export interface CampaignInsight {
   campaign_name: string;
   campaign_id: string;
+  delivery_status?: string;
   effective_status?: string;
   configured_status?: string;
   daily_budget?: string;
@@ -56,6 +57,7 @@ export interface AdHierarchyItem {
   id: string;
   name: string;
   level: 'campaign' | 'adset' | 'ad';
+  delivery_status?: string;
   effective_status?: string;
   configured_status?: string;
   daily_budget?: string;

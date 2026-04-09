@@ -106,6 +106,24 @@ const extractBillingThreshold = (payload: Record<string, unknown>): string | und
   return undefined;
 };
 
+const extractDeliveryStatus = (payload: Record<string, unknown>): string | undefined => {
+  const deliveryInfo = payload.delivery_info as Record<string, unknown> | undefined;
+  const candidates = [
+    payload.delivery_status,
+    deliveryInfo?.status,
+    deliveryInfo?.display_status,
+    deliveryInfo?.delivery_status,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+};
+
 const parseCreativePreview = (creative: Record<string, unknown> | undefined): CreativePreview | null => {
   if (!creative) return null;
 
@@ -167,6 +185,7 @@ const toHierarchyItem = (
     id: (row[fallbackIdKey] as string | undefined) || '',
     name: (row[fallbackNameKey] as string | undefined) || 'Без названия',
     level,
+    delivery_status: extractDeliveryStatus(row),
     effective_status: row.effective_status as string | undefined,
     configured_status: (row.configured_status as string | undefined) || (row.status as string | undefined),
     daily_budget: row.daily_budget as string | undefined,
@@ -345,17 +364,24 @@ export function useFacebookApi() {
       );
       const campaignsData = await campaignsRes.json();
       if (!campaignsData.error) {
-        const campaignMetaRes = await fetch(
-          `${FB_API_BASE}/${account.id}/campaigns?fields=id,effective_status,status,daily_budget,lifetime_budget&limit=200&access_token=${token}`
+        let campaignMetaRes = await fetch(
+          `${FB_API_BASE}/${account.id}/campaigns?fields=id,effective_status,status,daily_budget,lifetime_budget,delivery_info&limit=200&access_token=${token}`
         );
-        const campaignMetaData = await campaignMetaRes.json();
-        const campaignStatusById = new Map<string, { effective_status?: string; configured_status?: string; daily_budget?: string; lifetime_budget?: string }>();
+        let campaignMetaData = await campaignMetaRes.json();
+        if (campaignMetaData.error) {
+          campaignMetaRes = await fetch(
+            `${FB_API_BASE}/${account.id}/campaigns?fields=id,effective_status,status,daily_budget,lifetime_budget&limit=200&access_token=${token}`
+          );
+          campaignMetaData = await campaignMetaRes.json();
+        }
+        const campaignStatusById = new Map<string, { delivery_status?: string; effective_status?: string; configured_status?: string; daily_budget?: string; lifetime_budget?: string }>();
 
         if (!campaignMetaData.error) {
           for (const campaignRow of (campaignMetaData.data || []) as Array<Record<string, unknown>>) {
             const id = campaignRow.id as string | undefined;
             if (!id) continue;
             campaignStatusById.set(id, {
+              delivery_status: extractDeliveryStatus(campaignRow),
               effective_status: campaignRow.effective_status as string | undefined,
               configured_status: campaignRow.status as string | undefined,
               daily_budget: campaignRow.daily_budget as string | undefined,
@@ -366,6 +392,7 @@ export function useFacebookApi() {
 
         setCampaigns(((campaignsData.data || []) as CampaignInsight[]).map((campaign) => ({
           ...campaign,
+          delivery_status: campaignStatusById.get(campaign.campaign_id)?.delivery_status,
           effective_status: campaignStatusById.get(campaign.campaign_id)?.effective_status,
           configured_status: campaignStatusById.get(campaign.campaign_id)?.configured_status,
           daily_budget: campaignStatusById.get(campaign.campaign_id)?.daily_budget,
@@ -504,14 +531,22 @@ export function useFacebookApi() {
       const adsetsData = await adsetsRes.json();
       if (adsetsData.error) throw new Error(adsetsData.error.message);
 
-      const adsetStatusById = new Map<string, { effective_status?: string; configured_status?: string; daily_budget?: string; lifetime_budget?: string }>();
-      const adsetsMetaRows = await fetchAllPages(
-        `${FB_API_BASE}/${campaign.campaign_id}/adsets?fields=id,effective_status,status,daily_budget,lifetime_budget&limit=100&access_token=${token}`
-      );
+      const adsetStatusById = new Map<string, { delivery_status?: string; effective_status?: string; configured_status?: string; daily_budget?: string; lifetime_budget?: string }>();
+      let adsetsMetaRows: Array<Record<string, unknown>> = [];
+      try {
+        adsetsMetaRows = await fetchAllPages(
+          `${FB_API_BASE}/${campaign.campaign_id}/adsets?fields=id,effective_status,status,daily_budget,lifetime_budget,delivery_info&limit=100&access_token=${token}`
+        );
+      } catch {
+        adsetsMetaRows = await fetchAllPages(
+          `${FB_API_BASE}/${campaign.campaign_id}/adsets?fields=id,effective_status,status,daily_budget,lifetime_budget&limit=100&access_token=${token}`
+        );
+      }
       for (const adsetRow of adsetsMetaRows) {
         const id = adsetRow.id as string | undefined;
         if (!id) continue;
         adsetStatusById.set(id, {
+          delivery_status: extractDeliveryStatus(adsetRow),
           effective_status: adsetRow.effective_status as string | undefined,
           configured_status: adsetRow.status as string | undefined,
           daily_budget: adsetRow.daily_budget as string | undefined,
@@ -525,9 +560,16 @@ export function useFacebookApi() {
       const adsData = await adsRes.json();
       if (adsData.error) throw new Error(adsData.error.message);
 
-      const creativeRows = await fetchAllPages(
-        `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,effective_status,status,creative{id,name,thumbnail_url,image_url,image_hash,video_id,body,title,link_url,object_story_spec{link_data{picture,image_hash,link,name,message},photo_data{image_hash,url},video_data{image_url,video_id,message,title,call_to_action}}}&limit=100&access_token=${token}`
-      );
+      let creativeRows: Array<Record<string, unknown>> = [];
+      try {
+        creativeRows = await fetchAllPages(
+          `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,effective_status,status,delivery_info,creative{id,name,thumbnail_url,image_url,image_hash,video_id,body,title,link_url,object_story_spec{link_data{picture,image_hash,link,name,message},photo_data{image_hash,url},video_data{image_url,video_id,message,title,call_to_action}}}&limit=100&access_token=${token}`
+        );
+      } catch {
+        creativeRows = await fetchAllPages(
+          `${FB_API_BASE}/${campaign.campaign_id}/ads?fields=id,name,adset_id,effective_status,status,creative{id,name,thumbnail_url,image_url,image_hash,video_id,body,title,link_url,object_story_spec{link_data{picture,image_hash,link,name,message},photo_data{image_hash,url},video_data{image_url,video_id,message,title,call_to_action}}}&limit=100&access_token=${token}`
+        );
+      }
 
       const creativeByAdId = new Map<string, CreativePreview | null>();
       for (const ad of creativeRows) {
@@ -605,6 +647,7 @@ export function useFacebookApi() {
         const item = toHierarchyItem(
           {
             ...row,
+            delivery_status: extractDeliveryStatus(creativeMeta || {}),
             effective_status: creativeMeta?.effective_status,
             status: creativeMeta?.status,
           },
@@ -624,6 +667,7 @@ export function useFacebookApi() {
           return {
             adset: toHierarchyItem({
               ...row,
+              delivery_status: adsetStatusById.get(adsetId)?.delivery_status,
               effective_status: adsetStatusById.get(adsetId)?.effective_status,
               status: adsetStatusById.get(adsetId)?.configured_status,
               daily_budget: adsetStatusById.get(adsetId)?.daily_budget,

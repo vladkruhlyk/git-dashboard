@@ -87,58 +87,73 @@ function formatMoney(n: number, currency = 'USD'): string {
 
 function normalizeStatus(status?: string): string | null {
   if (!status) return null;
+  const normalized = status.trim().toUpperCase();
   const labels: Record<string, string> = {
     ACTIVE: 'Активно',
-    PAUSED: 'На паузе',
-    ARCHIVED: 'Архив',
-    DELETED: 'Удалено',
-    CAMPAIGN_PAUSED: 'Кампания на паузе',
-    ADSET_PAUSED: 'Группа на паузе',
-    WITH_ISSUES: 'С ошибками',
-    IN_PROCESS: 'Обработка',
-    PROCESSING: 'Обработка',
-    PENDING_REVIEW: 'Проверка',
-    UNDER_REVIEW: 'Проверка',
-    PREAPPROVED: 'Предварительно одобрено',
-    APPROVED: 'Одобрено',
-    DISAPPROVED: 'Отклонено',
-    PENDING_BILLING_INFO: 'Ожидает биллинг',
-    PENDING_SETTLEMENT: 'Ожидает списания',
-    COMPLETED: 'Завершено',
+    APPROVED: 'Активно',
+    PREAPPROVED: 'Активно',
+    DELIVERING: 'Активно',
+    PAUSED: 'Выключено',
+    CAMPAIGN_PAUSED: 'Выключено',
+    ADSET_PAUSED: 'Выключено',
+    WITH_ISSUES: 'Выключено',
+    DISAPPROVED: 'Выключено',
+    ARCHIVED: 'Выключено',
+    DELETED: 'Выключено',
+    INACTIVE: 'Выключено',
+    COMPLETED: 'Завершена',
     FINISHED: 'Завершена',
     ENDED: 'Завершена',
-    INACTIVE: 'Неактивно',
+    STOPPED: 'Завершена',
+    PENDING_REVIEW: 'На проверке',
+    UNDER_REVIEW: 'На проверке',
+    IN_REVIEW: 'На проверке',
+    PENDING: 'На проверке',
+    IN_PROCESS: 'Обработка',
+    PROCESSING: 'Обработка',
+    PREPARING: 'Обработка',
+    PENDING_BILLING_INFO: 'Обработка',
+    PENDING_SETTLEMENT: 'Обработка',
   };
 
-  return labels[status] || status.replace(/_/g, ' ').toLowerCase();
+  if (labels[normalized]) return labels[normalized];
+
+  return normalized
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/^\p{L}/u, (char) => char.toUpperCase());
 }
 
 function getStatusTone(status?: string): string {
-  switch (status) {
+  switch (status?.trim().toUpperCase()) {
     case 'ACTIVE':
     case 'APPROVED':
     case 'PREAPPROVED':
+    case 'DELIVERING':
       return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300';
-    case 'PAUSED':
-    case 'CAMPAIGN_PAUSED':
-    case 'ADSET_PAUSED':
-      return 'border-white/10 bg-white/5 text-gray-300';
     case 'PENDING_REVIEW':
     case 'UNDER_REVIEW':
+    case 'IN_REVIEW':
+    case 'PENDING':
     case 'IN_PROCESS':
     case 'PROCESSING':
+    case 'PREPARING':
     case 'PENDING_BILLING_INFO':
     case 'PENDING_SETTLEMENT':
       return 'border-sky-500/20 bg-sky-500/10 text-sky-300';
-    case 'WITH_ISSUES':
-    case 'DISAPPROVED':
+    case 'PAUSED':
+    case 'CAMPAIGN_PAUSED':
+    case 'ADSET_PAUSED':
     case 'COMPLETED':
     case 'FINISHED':
     case 'ENDED':
+    case 'STOPPED':
     case 'INACTIVE':
     case 'ARCHIVED':
     case 'DELETED':
-      return 'border-rose-500/20 bg-rose-500/10 text-rose-300';
+    case 'WITH_ISSUES':
+    case 'DISAPPROVED':
+      return 'border-white/10 bg-white/5 text-gray-300';
     default:
       return 'border-white/10 bg-white/5 text-gray-300';
   }
@@ -827,18 +842,23 @@ export function Dashboard({
     <span className={muted ? 'text-gray-500' : 'text-gray-300'}>{value}</span>
   );
 
-  const renderStatusBadges = (item: Pick<AdHierarchyItem, 'effective_status' | 'configured_status'> | Pick<CampaignInsight, 'effective_status' | 'configured_status'>) => {
+  const renderStatusBadges = (
+    item: Pick<AdHierarchyItem, 'delivery_status' | 'effective_status' | 'configured_status'>
+      | Pick<CampaignInsight, 'delivery_status' | 'effective_status' | 'configured_status'>
+  ) => {
+    const delivery = item.delivery_status;
     const effective = item.effective_status;
     const configured = item.configured_status;
-    const showConfigured = configured && configured !== effective;
+    const primaryStatus = delivery || effective || configured;
+    const showConfigured = !delivery && configured && configured !== effective;
 
-    if (!effective && !showConfigured) return null;
+    if (!primaryStatus && !showConfigured) return null;
 
     return (
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
-        {effective && (
-          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${getStatusTone(effective)}`}>
-            {normalizeStatus(effective)}
+        {primaryStatus && (
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${getStatusTone(primaryStatus)}`}>
+            {normalizeStatus(primaryStatus)}
           </span>
         )}
         {showConfigured && (
