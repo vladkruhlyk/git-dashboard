@@ -800,7 +800,7 @@ export function Dashboard({
             {showMetricsDropdown && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowMetricsDropdown(false)} />
-                <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-white/10 bg-[#0d1117] p-2 shadow-2xl shadow-black/60">
+                <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-white/10 bg-[#0d1117] p-2 shadow-2xl shadow-black/60 animate-scale-fade-in">
                   <div className="mb-2 flex items-center gap-2">
                     <button
                       onClick={() => setVisibleMetricKeys(defaultMetricKeys)}
@@ -884,7 +884,7 @@ export function Dashboard({
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-        {visibleMetrics.map((m) => (
+        {visibleMetrics.map((m, idx) => (
           <div
             key={m.key}
             draggable
@@ -895,7 +895,8 @@ export function Dashboard({
               setDraggingMetricKey(null);
             }}
             onDragEnd={() => setDraggingMetricKey(null)}
-            className="group/metric relative"
+            className="group/metric relative animate-fade-up"
+            style={{ animationDelay: `${idx * 50}ms` }}
           >
             <div className="absolute top-2 right-2 z-20 opacity-0 group-hover/metric:opacity-100 transition-opacity text-gray-500">
               <GripVertical className="w-4 h-4" />
@@ -906,7 +907,7 @@ export function Dashboard({
       </div>
 
       {campaigns.length > 0 && (
-        <div className="overflow-visible rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl">
+        <div className="overflow-visible rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl animate-section-enter" style={{ animationDelay: '0.15s' }}>
           <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold text-white">Кампании и структура</h3>
@@ -924,7 +925,7 @@ export function Dashboard({
                 {showBreakdownColumnsDropdown && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowBreakdownColumnsDropdown(false)} />
-                    <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-white/10 bg-[#0d1117] p-2 shadow-2xl shadow-black/60">
+                    <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-white/10 bg-[#0d1117] p-2 shadow-2xl shadow-black/60 animate-scale-fade-in">
                       <div className="mb-2 flex items-center gap-2">
                         <button
                           onClick={() => setVisibleBreakdownColumns(defaultBreakdownColumnKeys)}
@@ -1223,7 +1224,7 @@ export function Dashboard({
       )}
 
       {dailyData.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-section-enter" style={{ animationDelay: '0.25s' }}>
           <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6">
             <h3 className="text-lg font-semibold text-white mb-4">Расход по дням</h3>
             <ResponsiveContainer width="100%" height={280}>
@@ -1259,7 +1260,7 @@ export function Dashboard({
                 {showChartDropdown && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowChartDropdown(false)} />
-                    <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-[#0d1117] shadow-2xl shadow-black/60 z-50 overflow-hidden">
+                    <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-[#0d1117] shadow-2xl shadow-black/60 z-50 overflow-hidden animate-scale-fade-in">
                       {chartOptions.map((opt) => (
                         <button
                           key={opt.value}
@@ -1325,7 +1326,7 @@ export function Dashboard({
         </div>
       )}
 
-      <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6">
+      <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur-xl p-6 animate-section-enter" style={{ animationDelay: '0.35s' }}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-white">Воронка конверсий</h3>
           <div className="relative" data-export-ignore="true">
@@ -1339,7 +1340,7 @@ export function Dashboard({
             {showFunnelGoalDropdown && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowFunnelGoalDropdown(false)} />
-                <div className="absolute right-0 top-full z-50 mt-2 w-36 overflow-hidden rounded-lg border border-white/10 bg-[#0d1117] shadow-xl">
+                <div className="absolute right-0 top-full z-50 mt-2 w-36 overflow-hidden rounded-lg border border-white/10 bg-[#0d1117] shadow-xl animate-scale-fade-in">
                   <button
                     onClick={() => {
                       setFunnelGoal('leads');
@@ -1399,8 +1400,8 @@ export function Dashboard({
 
       {budgetEditor && (
         <>
-          <div className="fixed inset-0 z-[72] bg-black/70 backdrop-blur-sm" onClick={() => setBudgetEditor(null)} />
-          <div className="fixed inset-x-4 top-1/2 z-[82] mx-auto w-full max-w-md -translate-y-1/2 overflow-hidden rounded-[28px] border border-white/10 bg-[#0d1117] p-6 shadow-2xl shadow-black/70">
+          <div className="fixed inset-0 z-[72] bg-black/70 backdrop-blur-sm animate-overlay-enter" onClick={() => setBudgetEditor(null)} />
+          <div className="fixed inset-x-4 top-1/2 z-[82] mx-auto w-full max-w-md -translate-y-1/2 overflow-hidden rounded-[28px] border border-white/10 bg-[#0d1117] p-6 shadow-2xl shadow-black/70 animate-modal-enter">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 text-sm text-indigo-300">
@@ -1467,8 +1468,8 @@ export function Dashboard({
 
       {creativePreview && (
         <>
-          <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm" onClick={() => setCreativePreview(null)} />
-          <div className="fixed inset-x-4 top-1/2 z-[80] mx-auto w-full max-w-6xl -translate-y-1/2 overflow-hidden rounded-[28px] border border-white/10 bg-[#0d1117] p-6 shadow-2xl shadow-black/70">
+          <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm animate-overlay-enter" onClick={() => setCreativePreview(null)} />
+          <div className="fixed inset-x-4 top-1/2 z-[80] mx-auto w-full max-w-6xl -translate-y-1/2 overflow-hidden rounded-[28px] border border-white/10 bg-[#0d1117] p-6 shadow-2xl shadow-black/70 animate-modal-enter">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 text-sm text-indigo-300">

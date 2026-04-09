@@ -241,7 +241,7 @@ export function App() {
 
         {accounts.length > 0 && (
           <div className="mx-auto flex max-w-[1800px] gap-6 px-4 py-6 md:px-6">
-            <aside className="sticky top-24 hidden h-[calc(100vh-8rem)] w-80 shrink-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#0b1018]/85 backdrop-blur-xl lg:flex lg:flex-col">
+            <aside className="sticky top-24 hidden h-[calc(100vh-8rem)] w-80 shrink-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#0b1018]/85 backdrop-blur-xl lg:flex lg:flex-col animate-sidebar-enter">
               <div className="border-b border-white/5 px-5 py-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -262,7 +262,7 @@ export function App() {
               </div>
 
               {showAccountSettings && (
-                <div className="border-b border-white/5 bg-white/[0.02] px-5 py-4">
+                <div className="border-b border-white/5 bg-white/[0.02] px-5 py-4 animate-settings-expand">
                   <div className="mb-3 flex items-center gap-2 text-sm text-gray-300">
                     <CheckSquare className="h-4 w-4 text-indigo-300" />
                     Настройки отображения кабинетов
@@ -306,7 +306,7 @@ export function App() {
               )}
 
               <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-                {visibleAccounts.map((account) => {
+                {visibleAccounts.map((account, idx) => {
                   const isActive = selectedAccount?.id === account.id;
                   const balance = parseMoneyLike(account.balance);
                   const billingMeta = getBillingMeta(account.account_status, balance, account.disable_reason);
@@ -321,11 +321,12 @@ export function App() {
                         setDraggingAccountId(null);
                       }}
                       onDragEnd={() => setDraggingAccountId(null)}
-                      className={`mb-2 rounded-2xl border px-4 py-4 transition-all duration-200 ${
+                      className={`mb-2 rounded-2xl border px-4 py-4 transition-all duration-200 animate-fade-up ${
                         isActive
                           ? 'border-indigo-500/30 bg-indigo-500/12 shadow-lg shadow-indigo-500/10'
                           : 'border-white/5 bg-white/[0.03] hover:bg-white/[0.05]'
                       } ${draggingAccountId === account.id ? 'scale-[0.985] opacity-60' : ''} ${draggingAccountId && draggingAccountId !== account.id ? 'hover:-translate-y-1' : ''}`}
+                      style={{ animationDelay: `${idx * 60}ms` }}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <button
@@ -389,7 +390,7 @@ export function App() {
                 />
               ) : (
                 <div className="flex min-h-[60vh] items-center justify-center">
-                  <div className="text-center space-y-4">
+                  <div className="text-center space-y-4 animate-empty-bounce">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-white/10">
                       <svg className="w-8 h-8 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
                         <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />

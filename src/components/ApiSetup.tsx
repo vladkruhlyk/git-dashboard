@@ -108,9 +108,9 @@ export function ApiSetup({
   if (!token || accounts.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="w-full max-w-lg">
+        <div className="w-full max-w-lg animate-login-enter">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-2xl shadow-indigo-500/30 mb-6">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-2xl shadow-indigo-500/30 mb-6 animate-login-icon">
               <Key className="w-10 h-10 text-white" />
             </div>
             <h1 className="text-4xl font-bold text-white mb-3">FB/IG Ads Dashboard</h1>
@@ -150,7 +150,7 @@ export function ApiSetup({
             </button>
 
             {error && (
-              <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-red-400 text-sm">
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-red-400 text-sm animate-fade-up">
                 {error}
               </div>
             )}
@@ -216,7 +216,7 @@ export function ApiSetup({
             {openCalendarFor && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setOpenCalendarFor(null)} />
-                <div className="absolute top-full left-0 mt-2 z-50 w-[300px] rounded-2xl border border-white/10 bg-[#0d1117] p-3 shadow-2xl shadow-black/50">
+                <div className="absolute top-full left-0 mt-2 z-50 w-[300px] rounded-2xl border border-white/10 bg-[#0d1117] p-3 shadow-2xl shadow-black/50 animate-calendar-enter">
                   <div className="mb-3 flex items-center justify-between">
                     <button
                       onClick={() => setVisibleMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}

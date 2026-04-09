@@ -34,6 +34,8 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ─── Base keyframes ─── */
+
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
@@ -52,4 +54,233 @@ body {
 
 .animate-dashboard-enter {
   animation: dashboard-enter 0.35s ease-out;
+}
+
+/* ─── Fade-up for staggered items (metric cards, sidebar items) ─── */
+
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Fade-in (generic) ─── */
+
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+/* ─── Scale-fade for dropdowns & modals ─── */
+
+@keyframes scale-fade-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-scale-fade-in {
+  animation: scale-fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Modal overlay + content enter ─── */
+
+@keyframes overlay-enter {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes modal-enter {
+  0% {
+    opacity: 0;
+    scale: 0.96;
+  }
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+.animate-overlay-enter {
+  animation: overlay-enter 0.2s ease-out both;
+}
+
+.animate-modal-enter {
+  animation: modal-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Section slide-up for chart/funnel blocks ─── */
+
+@keyframes section-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-section-enter {
+  animation: section-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Login page entrance ─── */
+
+@keyframes login-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-login-enter {
+  animation: login-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes login-icon-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-12deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.animate-login-icon {
+  animation: login-icon-enter 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.15s;
+}
+
+/* ─── Sidebar slide-in ─── */
+
+@keyframes sidebar-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-sidebar-enter {
+  animation: sidebar-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Skeleton shimmer ─── */
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* ─── Settings panel slide-down ─── */
+
+@keyframes settings-expand {
+  0% {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    max-height: 500px;
+    transform: translateY(0);
+  }
+}
+
+.animate-settings-expand {
+  animation: settings-expand 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  overflow: hidden;
+}
+
+/* ─── Calendar dropdown ─── */
+
+@keyframes calendar-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-calendar-enter {
+  animation: calendar-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Empty state bounce ─── */
+
+@keyframes empty-bounce {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  60% {
+    transform: translateY(-4px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-empty-bounce {
+  animation: empty-bounce 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Number counter transition helper ─── */
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Smooth table row highlight ─── */
+
+tr {
+  transition: background-color 0.15s ease;
 }
