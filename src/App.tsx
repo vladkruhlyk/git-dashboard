@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CheckSquare, EyeOff, PanelLeft, PencilLine, Settings2, Square } from 'lucide-react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { CheckSquare, Copy, EyeOff, KeyRound, Link2, Loader2, PanelLeft, PencilLine, Settings2, Square } from 'lucide-react';
 import { CursorGlow } from './components/CursorGlow';
 import { ApiSetup } from './components/ApiSetup';
 import { Dashboard } from './components/Dashboard';
@@ -8,6 +8,9 @@ import { useFacebookApi } from './hooks/useFacebookApi';
 const VISIBLE_ACCOUNTS_STORAGE_KEY = 'dashboard_visible_accounts';
 const ACCOUNT_ALIASES_STORAGE_KEY = 'dashboard_account_aliases';
 const ACCOUNT_ORDER_STORAGE_KEY = 'dashboard_account_order';
+const ADMIN_AUTH_STORAGE_KEY = 'dashboard_admin_authenticated';
+const ENV_ADMIN_LOGIN = (import.meta.env.VITE_DASHBOARD_LOGIN as string | undefined)?.trim() || '';
+const ENV_ADMIN_PASSWORD = (import.meta.env.VITE_DASHBOARD_PASSWORD as string | undefined)?.trim() || '';
 
 function getCurrencyFractionDigits(currency: string): number {
   try {
@@ -49,6 +52,20 @@ function formatCurrencyValue(value: number, currency: string): string {
   }
 }
 
+function normalizeAccountId(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(?:act_)?(\d+)$/);
+  return match ? match[1] : null;
+}
+
+function getAccountIdFromUrl(): string | null {
+  const url = new URL(window.location.href);
+  const queryAccount = url.searchParams.get('account') || url.searchParams.get('account_id');
+  const pathMatch = window.location.pathname.match(/\/account\/(act_\d+|\d+)/);
+  return normalizeAccountId(queryAccount || pathMatch?.[1]);
+}
+
 function getBillingMeta(accountStatus: number, balance: number | null, disableReason?: number) {
   if (accountStatus === 1) {
     return {
@@ -86,6 +103,7 @@ export function App() {
     selectedCampaignId, selectCampaign, clearCampaignSelection,
     currentDateRange, campaignNodesById, loadingCampaignTreeId, loadCampaignTree, loadAdPreview,
     updateEntityStatus, updateEntityBudget,
+    hasEnvToken,
   } = useFacebookApi();
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [accountSettingsSearch, setAccountSettingsSearch] = useState('');
@@ -123,13 +141,22 @@ export function App() {
     }
   });
   const [draggingAccountId, setDraggingAccountId] = useState<string | null>(null);
+  const [copiedAccountId, setCopiedAccountId] = useState<string | null>(null);
+  const [clientAccountId] = useState<string | null>(() => getAccountIdFromUrl());
+  const isClientLinkMode = Boolean(clientAccountId);
+  const shouldProtectMainDashboard = Boolean(ENV_ADMIN_LOGIN && ENV_ADMIN_PASSWORD && !isClientLinkMode);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => (
+    !shouldProtectMainDashboard || localStorage.getItem(ADMIN_AUTH_STORAGE_KEY) === 'true'
+  ));
+  const [loginForm, setLoginForm] = useState({ login: '', password: '' });
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   // Auto-fetch accounts if token exists on load
   useEffect(() => {
-    if (token && accounts.length === 0) {
+    if (token && accounts.length === 0 && (isAdminAuthenticated || isClientLinkMode)) {
       fetchAccounts();
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accounts.length, fetchAccounts, isAdminAuthenticated, isClientLinkMode, token]);
 
   useEffect(() => {
     if (accounts.length === 0) return;
@@ -160,6 +187,22 @@ export function App() {
       return [...preserved, ...missing];
     });
   }, [accounts]);
+
+  useEffect(() => {
+    if (!clientAccountId || accounts.length === 0) return;
+    const match = accounts.find((account) => (
+      normalizeAccountId(account.account_id) === clientAccountId
+      || normalizeAccountId(account.id) === clientAccountId
+    ));
+
+    if (!match) {
+      setError('Кабинет из ссылки не найден среди доступных кабинетов.');
+      return;
+    }
+
+    if (selectedAccount?.id === match.id) return;
+    fetchInsights(match, currentDateRange);
+  }, [accounts, clientAccountId, currentDateRange, fetchInsights, selectedAccount?.id, setError]);
 
   const getAccountLabel = (accountId: string, fallbackName: string) => accountAliases[accountId]?.trim() || fallbackName;
 
@@ -210,6 +253,44 @@ export function App() {
     });
   };
 
+  const getClientLink = (accountId: string) => {
+    const url = new URL(window.location.href);
+    url.pathname = '/';
+    url.search = '';
+    url.hash = '';
+    url.searchParams.set('account', accountId);
+    return url.toString();
+  };
+
+  const copyClientLink = async (accountId: string) => {
+    const link = getClientLink(accountId);
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedAccountId(accountId);
+      window.setTimeout(() => setCopiedAccountId(null), 1600);
+    } catch {
+      window.prompt('Ссылка на кабинет:', link);
+    }
+  };
+
+  const handleAdminLogin = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (loginForm.login === ENV_ADMIN_LOGIN && loginForm.password === ENV_ADMIN_PASSWORD) {
+      localStorage.setItem(ADMIN_AUTH_STORAGE_KEY, 'true');
+      setIsAdminAuthenticated(true);
+      setLoginError(null);
+      return;
+    }
+
+    setLoginError('Неверный логин или пароль.');
+  };
+
+  const handleAdminLogout = () => {
+    localStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+    setIsAdminAuthenticated(false);
+    disconnect();
+  };
+
   const moveAccount = (sourceId: string, targetId: string) => {
     if (sourceId === targetId) return;
     setAccountOrder((prev) => {
@@ -246,21 +327,72 @@ export function App() {
 
       {/* Content */}
       <div className="relative z-10">
-        <ApiSetup
-          token={token}
-          onSaveToken={saveToken}
-          onFetchAccounts={fetchAccounts}
-          accounts={accounts}
-          selectedAccount={selectedAccount}
-          onSelectAccount={fetchInsights}
-          loading={loading}
-          error={error}
-          onDisconnect={disconnect}
-          onClearError={() => setError(null)}
-        />
+        {shouldProtectMainDashboard && !isAdminAuthenticated ? (
+          <div className="flex min-h-screen items-center justify-center px-4">
+            <form
+              onSubmit={handleAdminLogin}
+              className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d1117]/85 p-6 shadow-2xl shadow-black/40 backdrop-blur-xl"
+            >
+              <div className="mb-6 flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300">
+                  <KeyRound className="h-5 w-5" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-semibold text-white">Вход в дашборд</h1>
+                  <p className="text-sm text-gray-500">Основной кабинет закрыт паролем.</p>
+                </div>
+              </div>
 
-        {accounts.length > 0 && (
-          <div className="mx-auto flex max-w-[1800px] gap-6 px-4 py-6 md:px-6">
+              <div className="space-y-3">
+                <input
+                  value={loginForm.login}
+                  onChange={(event) => setLoginForm((prev) => ({ ...prev, login: event.target.value }))}
+                  placeholder="Логин"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none"
+                />
+                <input
+                  type="password"
+                  value={loginForm.password}
+                  onChange={(event) => setLoginForm((prev) => ({ ...prev, password: event.target.value }))}
+                  placeholder="Пароль"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              {loginError && (
+                <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  {loginError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-indigo-500"
+              >
+                Войти
+              </button>
+            </form>
+          </div>
+        ) : (
+          <ApiSetup
+            token={token}
+            onSaveToken={saveToken}
+            onFetchAccounts={fetchAccounts}
+            accounts={accounts}
+            selectedAccount={selectedAccount}
+            onSelectAccount={fetchInsights}
+            loading={loading}
+            error={error}
+            onDisconnect={shouldProtectMainDashboard ? handleAdminLogout : disconnect}
+            onClearError={() => setError(null)}
+            hideTokenLogin={hasEnvToken}
+            hideDisconnect={isClientLinkMode}
+          />
+        )}
+
+        {(isAdminAuthenticated || isClientLinkMode) && accounts.length > 0 && (
+          <div className={`mx-auto flex gap-6 px-4 py-6 md:px-6 ${isClientLinkMode ? 'max-w-[1600px]' : 'max-w-[1800px]'}`}>
+            {!isClientLinkMode && (
             <aside className="sticky top-24 hidden h-[calc(100vh-8rem)] w-80 shrink-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#0b1018]/85 backdrop-blur-xl lg:flex lg:flex-col animate-sidebar-enter">
               <div className="border-b border-white/5 px-5 py-5">
                 <div className="flex items-start justify-between gap-3">
@@ -383,6 +515,18 @@ export function App() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
+                            onClick={() => void copyClientLink(account.account_id)}
+                            className="rounded-lg border border-white/10 bg-white/5 p-2 text-gray-400 hover:bg-white/10 hover:text-white"
+                            title="Скопировать клиентскую ссылку"
+                          >
+                            {copiedAccountId === account.account_id ? (
+                              <Copy className="h-4 w-4 text-emerald-300" />
+                            ) : (
+                              <Link2 className="h-4 w-4" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => renameAccount(account.id, account.name)}
                             className="rounded-lg border border-white/10 bg-white/5 p-2 text-gray-400 hover:bg-white/10 hover:text-white"
                             title="Переименовать для себя"
@@ -401,6 +545,7 @@ export function App() {
                 })}
               </div>
             </aside>
+            )}
 
             <div className="min-w-0 flex-1">
               {selectedAccount && insights ? (
@@ -424,15 +569,19 @@ export function App() {
                 <div className="flex min-h-[60vh] items-center justify-center">
                   <div className="text-center space-y-4 animate-empty-bounce">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-white/10">
-                      <svg className="w-8 h-8 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                        <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                      </svg>
+                      {loading ? <Loader2 className="h-8 w-8 animate-spin text-indigo-400" /> : (
+                        <svg className="w-8 h-8 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                          <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                        </svg>
+                      )}
                     </div>
                     <h3 className="text-xl font-semibold text-white">
-                      Найдено {accounts.length} рекламных кабинетов
+                      {isClientLinkMode ? 'Загружаем кабинет из ссылки' : `Найдено ${accounts.length} рекламных кабинетов`}
                     </h3>
                     <p className="text-gray-400">
-                      Выбери нужный кабинет слева, и дашборд загрузит статистику за текущий период.
+                      {isClientLinkMode
+                        ? 'Дашборд откроет только кабинет, указанный в ссылке.'
+                        : 'Выбери нужный кабинет слева, и дашборд загрузит статистику за текущий период.'}
                     </p>
                   </div>
                 </div>

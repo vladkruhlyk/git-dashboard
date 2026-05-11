@@ -12,6 +12,7 @@ import type {
 } from '../types';
 
 const FB_API_BASE = 'https://graph.facebook.com/v21.0';
+const ENV_ACCESS_TOKEN = (import.meta.env.VITE_META_ACCESS_TOKEN as string | undefined)?.trim() || '';
 
 const parseActions = (actions: Array<{ action_type: string; value: string }> | undefined, type: string): number => {
   if (!actions) return 0;
@@ -269,7 +270,7 @@ function parseDailyArray(data: Array<Record<string, unknown>>): DailyData[] {
 }
 
 export function useFacebookApi() {
-  const [token, setToken] = useState<string>(() => localStorage.getItem('fb_token') || '');
+  const [token, setToken] = useState<string>(() => ENV_ACCESS_TOKEN || localStorage.getItem('fb_token') || '');
   const [accounts, setAccounts] = useState<AdAccount[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<AdAccount | null>(null);
   const [insights, setInsights] = useState<AccountInsights | null>(null);
@@ -287,8 +288,11 @@ export function useFacebookApi() {
   const [loadingCampaignTreeId, setLoadingCampaignTreeId] = useState<string | null>(null);
 
   const saveToken = useCallback((t: string) => {
-    setToken(t);
-    localStorage.setItem('fb_token', t);
+    const nextToken = ENV_ACCESS_TOKEN || t;
+    setToken(nextToken);
+    if (!ENV_ACCESS_TOKEN) {
+      localStorage.setItem('fb_token', t);
+    }
   }, []);
 
   const fetchAllPages = useCallback(async (initialUrl: string) => {
@@ -709,7 +713,7 @@ export function useFacebookApi() {
   }, [token, selectedAccount, campaignNodesById, lastDateRange, fetchAllPages]);
 
   const disconnect = useCallback(() => {
-    setToken('');
+    setToken(ENV_ACCESS_TOKEN);
     setAccounts([]);
     setSelectedAccount(null);
     setInsights(null);
@@ -721,7 +725,9 @@ export function useFacebookApi() {
     setLastDateRange(defaultDateRange());
     setCampaignNodesById({});
     setLoadingCampaignTreeId(null);
-    localStorage.removeItem('fb_token');
+    if (!ENV_ACCESS_TOKEN) {
+      localStorage.removeItem('fb_token');
+    }
   }, []);
 
   const updateEntityStatus = useCallback(async (
@@ -854,5 +860,6 @@ export function useFacebookApi() {
     loadAdPreview,
     updateEntityStatus,
     updateEntityBudget,
+    hasEnvToken: Boolean(ENV_ACCESS_TOKEN),
   };
 }

@@ -13,6 +13,8 @@ interface ApiSetupProps {
   error: string | null;
   onDisconnect: () => void;
   onClearError: () => void;
+  hideTokenLogin?: boolean;
+  hideDisconnect?: boolean;
 }
 
 type DateField = 'since' | 'until';
@@ -56,7 +58,7 @@ const getMonthGrid = (monthDate: Date): Array<Date | null> => {
 export function ApiSetup({
   token, onSaveToken, onFetchAccounts, accounts,
   selectedAccount, onSelectAccount, loading, error,
-  onDisconnect, onClearError,
+  onDisconnect, onClearError, hideTokenLogin = false, hideDisconnect = false,
 }: ApiSetupProps) {
   const [inputToken, setInputToken] = useState(token);
   const [dateRange, setDateRange] = useState<DateRange>(() => {
@@ -105,7 +107,7 @@ export function ApiSetup({
     applyDateRange({ since: toISO(past), until: toISO(today) });
   };
 
-  if (!token || accounts.length === 0) {
+  if ((!token || accounts.length === 0) && !hideTokenLogin) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-lg animate-login-enter">
@@ -170,6 +172,25 @@ export function ApiSetup({
               </p>
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (hideTokenLogin && accounts.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center space-y-4 animate-empty-bounce">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-white/10">
+            <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+          </div>
+          <h3 className="text-xl font-semibold text-white">Загружаем рекламные данные</h3>
+          <p className="text-gray-400">Подключение идёт через token из env.</p>
+          {error && (
+            <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+              {error}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -291,13 +312,15 @@ export function ApiSetup({
             <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
           )}
 
-          <button
-            onClick={onDisconnect}
-            className="ml-auto flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-gray-400 hover:text-red-400 hover:border-red-500/20 transition-all"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="hidden sm:block">Выйти</span>
-          </button>
+          {!hideDisconnect && (
+            <button
+              onClick={onDisconnect}
+              className="ml-auto flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-gray-400 hover:text-red-400 hover:border-red-500/20 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:block">Выйти</span>
+            </button>
+          )}
         </div>
 
         {error && (
