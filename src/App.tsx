@@ -442,7 +442,7 @@ export function App() {
         {(isAdminAuthenticated || isClientLinkMode) && accounts.length > 0 && (
           <div className={`mx-auto flex gap-6 px-4 py-6 md:px-6 ${isClientLinkMode ? 'max-w-[1600px]' : 'max-w-[1800px]'}`}>
             {!isClientLinkMode && (
-            <aside className="sticky top-24 hidden h-[calc(100vh-8rem)] w-80 shrink-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#0b1018]/85 backdrop-blur-xl lg:flex lg:flex-col animate-sidebar-enter">
+            <aside className="sticky top-24 hidden h-[calc(100vh-8rem)] w-[410px] shrink-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#0b1018]/85 backdrop-blur-xl lg:flex lg:flex-col animate-sidebar-enter">
               <div className="border-b border-white/5 px-5 py-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -523,14 +523,14 @@ export function App() {
                         setDraggingAccountId(null);
                       }}
                       onDragEnd={() => setDraggingAccountId(null)}
-                      className={`mb-2 rounded-2xl border px-4 py-4 transition-all duration-200 animate-fade-up ${
+                      className={`mb-2 rounded-2xl border px-5 py-4 transition-all duration-200 animate-fade-up ${
                         isActive
                           ? 'border-indigo-500/30 bg-indigo-500/12 shadow-lg shadow-indigo-500/10'
                           : 'border-white/5 bg-white/[0.03] hover:bg-white/[0.05]'
                       } ${draggingAccountId === account.id ? 'scale-[0.985] opacity-60' : ''} ${draggingAccountId && draggingAccountId !== account.id ? 'hover:-translate-y-1' : ''}`}
                       style={{ animationDelay: `${idx * 60}ms` }}
                     >
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start justify-between gap-4">
                         <button
                           onClick={() => fetchInsights(account, currentDateRange)}
                           className="min-w-0 flex-1 text-left"
@@ -545,8 +545,8 @@ export function App() {
                             </span>
                           </div>
                           <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <span className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-xs text-gray-300">
-                              <span className="uppercase tracking-[0.18em] text-gray-500">Задолженность</span>
+                            <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-xs text-gray-300">
+                              <span className="shrink-0 uppercase tracking-[0.14em] text-gray-500">Задолженность</span>
                               <span className={balance !== null && balance > 0 ? 'font-medium text-rose-300' : 'font-medium text-gray-300'}>
                                 {formatCurrencyValue(balance !== null && balance > 0 ? balance : 0, account.currency)}
                               </span>
@@ -559,15 +559,15 @@ export function App() {
                                 </span>
                               </span>
                             )}
-                            <span className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-xs text-gray-300">
-                              <span className="uppercase tracking-[0.18em] text-gray-500">План месяца</span>
+                            <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-xs text-gray-300">
+                              <span className="shrink-0 uppercase tracking-[0.14em] text-gray-500">План месяца</span>
                               <span className="font-medium text-gray-200">
                                 {monthlyBudgets[account.id] ? formatCurrencyValue(monthlyBudgets[account.id], account.currency) : 'Не задан'}
                               </span>
                             </span>
                           </div>
                         </button>
-                        <div className="flex items-center gap-2">
+                        <div className="grid shrink-0 grid-cols-3 gap-2">
                           <button
                             type="button"
                             onClick={() => void copyClientLink(account.account_id)}
@@ -597,9 +597,9 @@ export function App() {
                             <PencilLine className="h-4 w-4" />
                           </button>
                           {isActive ? (
-                            <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-indigo-400" />
+                            <div className="col-span-3 mx-auto mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-indigo-400" />
                           ) : (
-                            <EyeOff className="h-4 w-4 shrink-0 text-gray-600" />
+                            <EyeOff className="col-span-3 mx-auto mt-1 h-4 w-4 shrink-0 text-gray-600" />
                           )}
                         </div>
                       </div>
