@@ -68,6 +68,22 @@ const defaultDateRange = (): DateRange => {
   };
 };
 
+const toISODate = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const currentMonthDateRange = (): DateRange => {
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+  return {
+    since: toISODate(firstDay),
+    until: toISODate(today),
+  };
+};
+
 const campaignFilter = (campaignId: string) =>
   encodeURIComponent(JSON.stringify([{ field: 'campaign.id', operator: 'EQUAL', value: campaignId }]));
 
@@ -276,6 +292,7 @@ export function useFacebookApi() {
   const [insights, setInsights] = useState<AccountInsights | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignInsight[]>([]);
   const [dailyData, setDailyData] = useState<DailyData[]>([]);
+  const [currentMonthSpend, setCurrentMonthSpend] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -378,6 +395,17 @@ export function useFacebookApi() {
       }
       setInsights(parsed);
       setAccountInsights(parsed);
+
+      const monthRange = currentMonthDateRange();
+      const monthInsightsRes = await fetch(
+        `${FB_API_BASE}/${account.id}/insights?fields=spend&time_range={"since":"${monthRange.since}","until":"${monthRange.until}"}&access_token=${token}`
+      );
+      const monthInsightsData = await monthInsightsRes.json();
+      if (!monthInsightsData.error && monthInsightsData.data?.[0]) {
+        setCurrentMonthSpend(parseFloat(monthInsightsData.data[0].spend || '0'));
+      } else {
+        setCurrentMonthSpend(0);
+      }
 
       // Campaign-level insights
       const campaignsRes = await fetch(
@@ -719,6 +747,7 @@ export function useFacebookApi() {
     setInsights(null);
     setCampaigns([]);
     setDailyData([]);
+    setCurrentMonthSpend(0);
     setAccountInsights(null);
     setAccountDailyData([]);
     setSelectedCampaignId(null);
@@ -849,7 +878,7 @@ export function useFacebookApi() {
 
   return {
     token, saveToken, accounts, selectedAccount,
-    insights, campaigns, dailyData,
+    insights, campaigns, dailyData, currentMonthSpend,
     loading, error,
     fetchAccounts, fetchInsights, disconnect, setError,
     selectedCampaignId, selectCampaign, clearCampaignSelection,

@@ -66,6 +66,9 @@ interface DashboardProps {
   onLoadAdPreview: (adId: string) => Promise<void>;
   onUpdateEntityStatus: (level: 'campaign' | 'adset' | 'ad', id: string, status: 'ACTIVE' | 'PAUSED') => Promise<void>;
   onUpdateEntityBudget: (level: 'campaign' | 'adset', id: string, budgetType: 'daily_budget' | 'lifetime_budget', amount: number) => Promise<void>;
+  monthlyBudget: number | null;
+  currentMonthSpend: number;
+  onEditMonthlyBudget: () => void;
 }
 
 function formatNum(n: number, decimals = 0): string {
@@ -318,6 +321,7 @@ export function Dashboard({
   account, insights, campaigns, dailyData,
   selectedCampaignId, onSelectCampaign, onClearCampaign,
   campaignNodesById, loadingCampaignTreeId, onLoadCampaignTree, onLoadAdPreview, onUpdateEntityStatus, onUpdateEntityBudget,
+  monthlyBudget, currentMonthSpend, onEditMonthlyBudget,
 }: DashboardProps) {
   const [chartMetric, setChartMetric] = useState<ChartMetricKey>('purchases');
   const [showChartDropdown, setShowChartDropdown] = useState(false);
@@ -616,6 +620,58 @@ export function Dashboard({
     .filter(k => visibleMetricKeys.includes(k))
     .map(k => metricMap[k])
     .filter(Boolean);
+
+  const budgetPacing = useMemo(() => {
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const elapsedDays = now.getDate();
+    const remainingDays = Math.max(daysInMonth - elapsedDays, 0);
+    const budget = monthlyBudget || 0;
+    const expectedSpend = budget > 0 ? (budget / daysInMonth) * elapsedDays : 0;
+    const remainingBudget = budget > 0 ? Math.max(budget - currentMonthSpend, 0) : 0;
+    const currentDailyAvg = elapsedDays > 0 ? currentMonthSpend / elapsedDays : 0;
+    const requiredDailyAvg = remainingDays > 0 ? remainingBudget / remainingDays : remainingBudget;
+    const forecastSpend = currentDailyAvg * daysInMonth;
+    const progress = budget > 0 ? Math.min((currentMonthSpend / budget) * 100, 140) : 0;
+    const expectedProgress = budget > 0 ? Math.min((expectedSpend / budget) * 100, 100) : 0;
+    const delta = currentMonthSpend - expectedSpend;
+    const deltaRatio = expectedSpend > 0 ? delta / expectedSpend : 0;
+
+    let label = 'План не задан';
+    let tone = 'border-white/10 bg-white/[0.03] text-gray-300';
+    if (budget > 0) {
+      if (currentMonthSpend > budget) {
+        label = 'Бюджет уже превышен';
+        tone = 'border-rose-500/25 bg-rose-500/10 text-rose-300';
+      } else if (deltaRatio > 0.08) {
+        label = 'Идём быстрее плана';
+        tone = 'border-amber-500/25 bg-amber-500/10 text-amber-300';
+      } else if (deltaRatio < -0.08) {
+        label = 'Можно ускориться';
+        tone = 'border-sky-500/25 bg-sky-500/10 text-sky-300';
+      } else {
+        label = 'Идём в плане';
+        tone = 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300';
+      }
+    }
+
+    return {
+      budget,
+      daysInMonth,
+      elapsedDays,
+      remainingDays,
+      expectedSpend,
+      remainingBudget,
+      currentDailyAvg,
+      requiredDailyAvg,
+      forecastSpend,
+      progress,
+      expectedProgress,
+      delta,
+      label,
+      tone,
+    };
+  }, [currentMonthSpend, monthlyBudget]);
 
   const visibleCampaigns = useMemo(() => {
     const normalizedSearch = campaignSearch.trim().toLowerCase();
@@ -1111,6 +1167,82 @@ export function Dashboard({
           </button>
         </div>
       )}
+
+      <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 p-5 backdrop-blur-xl animate-section-enter">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-white">Темп бюджета месяца</h3>
+              <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${budgetPacing.tone}`}>
+                {budgetPacing.label}
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              {budgetPacing.elapsedDays} из {budgetPacing.daysInMonth} дней месяца · потрачено за текущий месяц
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onEditMonthlyBudget}
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            {budgetPacing.budget > 0 ? 'Изменить план' : 'Задать план'}
+          </button>
+        </div>
+
+        {budgetPacing.budget > 0 ? (
+          <>
+            <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-500">План</p>
+                <p className="mt-1 text-lg font-semibold text-white">{formatMoney(budgetPacing.budget, account.currency)}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Потрачено</p>
+                <p className="mt-1 text-lg font-semibold text-white">{formatMoney(currentMonthSpend, account.currency)}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Осталось</p>
+                <p className="mt-1 text-lg font-semibold text-white">{formatMoney(budgetPacing.remainingBudget, account.currency)}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Нужный темп</p>
+                <p className="mt-1 text-lg font-semibold text-white">{formatMoney(budgetPacing.requiredDailyAvg, account.currency)}/день</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Прогноз</p>
+                <p className={`mt-1 text-lg font-semibold ${budgetPacing.forecastSpend > budgetPacing.budget ? 'text-amber-300' : 'text-white'}`}>
+                  {formatMoney(budgetPacing.forecastSpend, account.currency)}
+                </p>
+              </div>
+            </div>
+
+            <div className="relative h-3 overflow-hidden rounded-full bg-white/5">
+              <div
+                className={`h-full rounded-full ${currentMonthSpend > budgetPacing.budget ? 'bg-rose-400' : 'bg-emerald-400'}`}
+                style={{ width: `${Math.min(budgetPacing.progress, 100)}%` }}
+              />
+              <div
+                className="absolute top-0 h-full w-px bg-white/70"
+                style={{ left: `${budgetPacing.expectedProgress}%` }}
+                title="Плановая точка на сегодня"
+              />
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-400">
+              <span>План на сегодня: {formatMoney(budgetPacing.expectedSpend, account.currency)}</span>
+              <span className={budgetPacing.delta > 0 ? 'text-amber-300' : 'text-sky-300'}>
+                {budgetPacing.delta > 0 ? 'Выше темпа на ' : 'Ниже темпа на '}
+                {formatMoney(Math.abs(budgetPacing.delta), account.currency)}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-gray-400">
+            Месячный план бюджета для этого кабинета ещё не задан.
+          </div>
+        )}
+      </div>
 
       <div ref={metricGridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
         {visibleMetrics.map((m, idx) => {

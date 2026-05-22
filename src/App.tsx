@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { CheckSquare, Copy, EyeOff, KeyRound, Link2, Loader2, PanelLeft, PencilLine, Settings2, Square } from 'lucide-react';
+import { CheckSquare, Copy, EyeOff, KeyRound, Link2, Loader2, PanelLeft, PencilLine, Settings2, Square, Wallet } from 'lucide-react';
 import { CursorGlow } from './components/CursorGlow';
 import { ApiSetup } from './components/ApiSetup';
 import { Dashboard } from './components/Dashboard';
@@ -8,6 +8,7 @@ import { useFacebookApi } from './hooks/useFacebookApi';
 const VISIBLE_ACCOUNTS_STORAGE_KEY = 'dashboard_visible_accounts';
 const ACCOUNT_ALIASES_STORAGE_KEY = 'dashboard_account_aliases';
 const ACCOUNT_ORDER_STORAGE_KEY = 'dashboard_account_order';
+const MONTHLY_BUDGETS_STORAGE_KEY = 'dashboard_monthly_budgets';
 const ADMIN_AUTH_STORAGE_KEY = 'dashboard_admin_authenticated';
 const ENV_ADMIN_LOGIN = (import.meta.env.VITE_DASHBOARD_LOGIN as string | undefined)?.trim() || '';
 const ENV_ADMIN_PASSWORD = (import.meta.env.VITE_DASHBOARD_PASSWORD as string | undefined)?.trim() || '';
@@ -101,6 +102,7 @@ export function App() {
     loading, error,
     fetchAccounts, fetchInsights, disconnect, setError,
     selectedCampaignId, selectCampaign, clearCampaignSelection,
+    currentMonthSpend,
     currentDateRange, campaignNodesById, loadingCampaignTreeId, loadCampaignTree, loadAdPreview,
     updateEntityStatus, updateEntityBudget,
     hasEnvToken,
@@ -140,6 +142,24 @@ export function App() {
       return [];
     }
   });
+  const [monthlyBudgets, setMonthlyBudgets] = useState<Record<string, number>>(() => {
+    try {
+      const raw = localStorage.getItem(MONTHLY_BUDGETS_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      return Object.fromEntries(
+        Object.entries(parsed || {}).filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value > 0)
+      ) as Record<string, number>;
+    } catch {
+      return {};
+    }
+  });
+  const [monthlyBudgetEditor, setMonthlyBudgetEditor] = useState<{
+    accountId: string;
+    name: string;
+    currency: string;
+    value: string;
+  } | null>(null);
   const [draggingAccountId, setDraggingAccountId] = useState<string | null>(null);
   const [copiedAccountId, setCopiedAccountId] = useState<string | null>(null);
   const [clientAccountId] = useState<string | null>(() => getAccountIdFromUrl());
@@ -177,6 +197,10 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(ACCOUNT_ORDER_STORAGE_KEY, JSON.stringify(accountOrder));
   }, [accountOrder]);
+
+  useEffect(() => {
+    localStorage.setItem(MONTHLY_BUDGETS_STORAGE_KEY, JSON.stringify(monthlyBudgets));
+  }, [monthlyBudgets]);
 
   useEffect(() => {
     if (accounts.length === 0) return;
@@ -251,6 +275,31 @@ export function App() {
       }
       return { ...prev, [accountId]: trimmed };
     });
+  };
+
+  const openMonthlyBudgetEditor = (account: { id: string; name: string; currency: string }) => {
+    const currentBudget = monthlyBudgets[account.id];
+    setMonthlyBudgetEditor({
+      accountId: account.id,
+      name: getAccountLabel(account.id, account.name),
+      currency: account.currency,
+      value: currentBudget ? String(currentBudget) : '',
+    });
+  };
+
+  const saveMonthlyBudget = () => {
+    if (!monthlyBudgetEditor) return;
+    const parsed = Number(monthlyBudgetEditor.value.replace(',', '.'));
+    setMonthlyBudgets((prev) => {
+      const next = { ...prev };
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        delete next[monthlyBudgetEditor.accountId];
+        return next;
+      }
+      next[monthlyBudgetEditor.accountId] = parsed;
+      return next;
+    });
+    setMonthlyBudgetEditor(null);
   };
 
   const getClientLink = (accountId: string) => {
@@ -510,6 +559,12 @@ export function App() {
                                 </span>
                               </span>
                             )}
+                            <span className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-xs text-gray-300">
+                              <span className="uppercase tracking-[0.18em] text-gray-500">План месяца</span>
+                              <span className="font-medium text-gray-200">
+                                {monthlyBudgets[account.id] ? formatCurrencyValue(monthlyBudgets[account.id], account.currency) : 'Не задан'}
+                              </span>
+                            </span>
                           </div>
                         </button>
                         <div className="flex items-center gap-2">
@@ -524,6 +579,14 @@ export function App() {
                             ) : (
                               <Link2 className="h-4 w-4" />
                             )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openMonthlyBudgetEditor(account)}
+                            className="rounded-lg border border-white/10 bg-white/5 p-2 text-gray-400 hover:bg-white/10 hover:text-white"
+                            title="Задать месячный бюджет"
+                          >
+                            <Wallet className="h-4 w-4" />
                           </button>
                           <button
                             type="button"
@@ -564,6 +627,9 @@ export function App() {
                   onLoadAdPreview={loadAdPreview}
                   onUpdateEntityStatus={updateEntityStatus}
                   onUpdateEntityBudget={updateEntityBudget}
+                  monthlyBudget={monthlyBudgets[selectedAccount.id] || null}
+                  currentMonthSpend={currentMonthSpend}
+                  onEditMonthlyBudget={() => openMonthlyBudgetEditor(selectedAccount)}
                 />
               ) : (
                 <div className="flex min-h-[60vh] items-center justify-center">
@@ -590,6 +656,59 @@ export function App() {
           </div>
         )}
       </div>
+
+      {monthlyBudgetEditor && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d1117] p-6 shadow-2xl shadow-black/60">
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300">
+                <Wallet className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold text-white">Месячный бюджет</h3>
+                <p className="truncate text-sm text-gray-500">{monthlyBudgetEditor.name}</p>
+              </div>
+            </div>
+
+            <label className="mb-2 block text-sm text-gray-400">
+              План на месяц, {monthlyBudgetEditor.currency}
+            </label>
+            <input
+              autoFocus
+              value={monthlyBudgetEditor.value}
+              onChange={(event) => setMonthlyBudgetEditor((prev) => (
+                prev ? { ...prev, value: event.target.value } : prev
+              ))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') saveMonthlyBudget();
+                if (event.key === 'Escape') setMonthlyBudgetEditor(null);
+              }}
+              placeholder="Например, 3000"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none"
+            />
+            <p className="mt-2 text-xs text-gray-500">
+              Оставь поле пустым или введи 0, чтобы убрать план.
+            </p>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setMonthlyBudgetEditor(null)}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-gray-300 hover:bg-white/10"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={saveMonthlyBudget}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
